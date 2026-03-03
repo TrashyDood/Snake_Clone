@@ -1,5 +1,6 @@
 #include "Game.h"
 #include <iostream>
+#include <stdexcept>
 
 #define WRITELINE(x) std::cout << x << "\n" 
 #define WRITE(x) std::cout << x;
@@ -12,15 +13,16 @@ namespace Game
 	{
 		using namespace Core;
 
-		GameTime time(duration<float>(1.0f / 30));
 		GameState game{};
+		GameTime time{};
+		GameTime fixedTime{ duration<float>(1.0f / 30) };
 
 		OnInit(game);
 
 		steady_clock::time_point previousTime = steady_clock::now();
 		duration<float> accumulator(0.0f);
 
-		while (game.mIsRunning)
+		while (game.mIsRunning) // Game loop.
 		{
 			time.mTime = steady_clock::now();
 			time.mTimeStep = time.mTime - previousTime;
@@ -29,21 +31,21 @@ namespace Game
 			previousTime = time.mTime;
 			accumulator += time.mTimeStep;
 
-			if (time.mTimeStep.count() > 0.25)
+			if (time.mTimeStep.count() > 0.25) // Guard against spiral of death.
 				time.mTimeStep = duration<float>(0.25);
 
-			while (accumulator >= time.mFixedTimeStep)
-			{
-				time.mFixedTime = steady_clock::now();
-				time.mFixedDeltaTime = time.mFixedTimeStep.count();
-
-				accumulator -= time.mFixedTimeStep;
-
-				OnFixedTick(game, time);
-				OnDraw(game, time);
-			}
-
 			OnTick(game, time);
+
+			while (accumulator >= fixedTime.mTimeStep) // Latency compensation.
+			{
+				fixedTime.mTime = steady_clock::now();
+				fixedTime.mDeltaTime = fixedTime.mTimeStep.count();
+
+				OnFixedTick(game, fixedTime);
+				OnDraw(game, fixedTime);
+
+				accumulator -= fixedTime.mTimeStep;
+			}
 		}
 
 		OnExit(game, time);
@@ -52,21 +54,13 @@ namespace Game
 	namespace Core
 	{
 		using namespace Game::Draw;
+		using namespace Game::Mechanics;
 
 		void OnInit(GameState& pGame)
 		{
-			// initialize tile types.
-			pGame.mTileLookup.clear();
-			for (size_t i = 0; i < pGame.mTileTypes.size(); i++)
-			{
-				Tile& tileType = pGame.mTileTypes[i];
-
-				std::string symbol(1, tileType.mSymbol);
-				pGame.mTileLookup[symbol] = i;
-				pGame.mTileLookup[tileType.mName] = i;
-			}
-
 			setupCustomConsole();
+			InitTiles(pGame);
+			pGame.mTileMap = GenTileMap(pGame);
 		}
 
 		void OnTick(GameState& pGame, GameTime& pTime)
@@ -91,20 +85,17 @@ namespace Game
 		void OnFixedTick(GameState& pGame, GameTime& pTime)
 		{
 			pGame.mPlayer1.mPosX += pGame.mPlayer1.mDirX *
-				pTime.mFixedDeltaTime * pGame.mPlayer1.mSpeed;
+				pTime.mDeltaTime * pGame.mPlayer1.mSpeed;
 
 			pGame.mPlayer1.mPosY += pGame.mPlayer1.mDirY *
-				pTime.mFixedDeltaTime * pGame.mPlayer1.mSpeed;
+				pTime.mDeltaTime * pGame.mPlayer1.mSpeed;
 		}
 
 		void OnDraw(GameState& pGame, GameTime& pTime)
 		{
-			clearBuffer();
+			//clearBuffer();
 
-			DrawTileMap(pGame.mTileMap, screen_width, screen_height);
-			Mechanics::GetTileType(pGame, TileID::Snake);
-
-			renderBuffers({3, 0});
+			//renderBuffers();
 		}
 
 		void OnExit(GameState& pGame, GameTime& pTime) { deleteCustomConsole(); }
@@ -112,19 +103,39 @@ namespace Game
 
 	namespace Draw
 	{
-		void DrawTile(Tile& pTile, size_t x, size_t y) { drawTile(x, y, pTile.mSymbol, pTile.mColor); }
+		void DrawTile(Tile& pTile, Coord pCoords) { drawTile(pCoords.x, pCoords.y, pTile.mSymbol, pTile.mColor); }
 
-		void DrawTileMap(TileMap& mTileMap, size_t width, size_t height, size_t x, size_t y)
+		void DrawTile(Tile* pTile, Coord pCoords)
 		{
-			for (size_t x = 0; x < width; x++)
-				for (size_t y = 0; y < height; y++)
-					DrawTile(mTileMap[(x + width * y)], x, y);
+			if (!pTile)
+				throw std::runtime_error("Tile is null!");
+
+			drawTile(pCoords.x, pCoords.y, pTile->mSymbol, pTile->mColor);
+		}
+
+		void DrawTileMap(TileMap& pTileMap)
+		{
+
 		}
 	}
 
 	namespace Mechanics
 	{
+		void InitTiles(GameState& pGame)
+		{
+			// initialize tile types.
+			for (size_t i = 0; i < pGame.mTileTypes.size(); i++)
+			{
+				Tile& tileType = pGame.mTileTypes[i];
+				tileType.mId = i;
+			}
+		}
+
+		TileMap GenTileMap(GameState& pGame)
+		{
+			return TileMap(0, 0);
+		}
+
 		Tile& GetTileType(GameState& pGame, unsigned short pId) { return pGame.mTileTypes[pId]; }
-		Tile& GetTileType(GameState& pGame, std::string pName) { return GetTileType(pGame, pGame.mTileLookup[pName]); }
 	}
 }

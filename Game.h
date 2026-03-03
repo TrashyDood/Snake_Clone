@@ -13,36 +13,74 @@ namespace Game
 {
 	struct GameTime
 	{
-		duration<float> mFixedTimeStep, mTimeStep;
-		steady_clock::time_point mFixedTime{}, mTime{};
-		float mFixedDeltaTime = 0, mDeltaTime = 0;
-
-		GameTime(duration<float> pTargetFixedTimeStep) :
-			mFixedTimeStep(pTargetFixedTimeStep), mTimeStep() {}
+		duration<float> mTimeStep;
+		steady_clock::time_point mTime{};
+		float mDeltaTime = 0;
 	};
 
-	struct Tile
+	struct Coord
 	{
-		std::string mName;
-		char mSymbol;
-		unsigned short mColor;
-		bool mIsPassable = false;
+		size_t x, y;
 
-		bool operator==(Tile& pOther) {}
-	};
+		Coord operator+(Coord& pOther) { return Coord(x + pOther.x, y + pOther.y); }
+		Coord operator-(Coord& pOther) { return Coord(x - pOther.x, y - pOther.y); }
 
-	struct TileMap
-	{
-		std::array<Tile, buffer_size> mTiles;
-
-		Tile& operator[](size_t pIndex) { return mTiles[pIndex]; }
 	};
 
 	enum TileID : unsigned short
 	{
 		Wall = 0,
 		Fruit = 1,
-		Snake = 2
+		Snake = 2,
+		Snake1 = 3,
+		Snake2 = 4,
+		Snake4 = 5
+	};
+
+	struct Tile
+	{
+		char mSymbol;
+		unsigned long mColor;
+		bool mIsPassable = false;
+		unsigned short mId = 0;
+	};
+
+	// Heap allocated tile map.
+	struct TileMap
+	{
+		std::vector<Tile*> mTiles;
+		size_t mWidth = 0, mHeight = 0;
+
+		Tile*& operator()(size_t x, size_t y) { return mTiles[x + y * mWidth]; }
+		Tile* operator()(size_t x, size_t y) const { return mTiles[x + y * mWidth]; }
+		Tile*& operator[](Coord c) { return mTiles[c.x + c.y * mWidth]; }
+		Tile* operator[](Coord c) const { return mTiles[c.x + c.y * mWidth]; }
+
+		TileMap(size_t pWidth, size_t pHeight) :
+			mWidth(pWidth), mHeight(pHeight) {}
+
+		// Constructor from 2D initializer list of Tile*
+		TileMap(std::initializer_list<std::initializer_list<Tile*>> rows) :
+			mWidth(rows.begin()->size()), mHeight(rows.size())
+		{
+			if (mHeight == 0)
+				throw std::invalid_argument("TileMap cannot have zero height");
+
+			mTiles.resize(mWidth * mHeight);
+
+			size_t y = 0;
+			for (auto& row : rows)
+			{
+				if (row.size() != mWidth)
+					throw std::invalid_argument("All rows must have the same width");
+
+				size_t x = 0;
+				for (Tile* t : row)
+					mTiles[x++ + y * mWidth] = t;
+
+				++y;
+			}
+		}
 	};
 
 	struct GameState
@@ -55,13 +93,23 @@ namespace Game
 		} mPlayer1, mPlayer2, mPlayer3, mPlayer4;
 
 		bool mIsRunning = true;
-		TileMap mTileMap;
-		std::unordered_map<std::string, unsigned short> mTileLookup{};
-		std::array<Tile, 3> mTileTypes =
+		TileMap mTileMap = TileMap(1, 1);
+		std::array<unsigned short, 6> mColors =
 		{
-			Tile{ "Wall", '#', FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE },
-			Tile{ "Fruit", 'P', FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE, true },
-			Tile{ "Snake", '0', FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE },
+			FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE,
+			FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE,
+			FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE,
+			FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE,
+			FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE,
+		};
+		std::array<Tile, 6> mTileTypes =
+		{
+			Tile{ '#', FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE },
+			Tile{ 'P', FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE },
+			Tile{ '0', FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE },
+			Tile{ '0', FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE },
+			Tile{ '0', FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE },
+			Tile{ '0', FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE },
 		};
 	};
 
@@ -78,14 +126,16 @@ namespace Game
 
 	namespace Draw
 	{
-		void DrawTile(Tile& pTile, size_t x, size_t y);
-		void DrawTileMap(TileMap& mTileMap, size_t width, size_t height, size_t x = 0, size_t y = 0);
+		void DrawTile(Tile& pTile, Coord pCoords);
+		void DrawTile(Tile* pTile, Coord pCoords);
+		void DrawTileMap(TileMap& pTileMap);
 	}
 
 	namespace Mechanics
 	{
+		void InitTiles(GameState& pGame);
+		TileMap GenTileMap(GameState& pGame);
 		Tile& GetTileType(GameState& pGame, unsigned short pId);
-		Tile& GetTileType(GameState& pGame, std::string pName);
 	}
 }
 
