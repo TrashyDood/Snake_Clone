@@ -27,6 +27,14 @@ namespace Game
 
 	};
 
+	enum ColorID : unsigned short
+	{
+		Primary = 0,
+		Secondary = 1,
+		Tertiary = 2,
+		Quaternary = 3
+	};
+
 	enum TileID : unsigned short
 	{
 		Wall = 0,
@@ -57,7 +65,7 @@ namespace Game
 		Tile* operator[](Coord c) const { return mTiles[c.x + c.y * mWidth]; }
 
 		TileMap(size_t pWidth, size_t pHeight) :
-			mWidth(pWidth), mHeight(pHeight) {}
+			mWidth(pWidth), mHeight(pHeight) { mTiles.resize(pWidth * pHeight, nullptr); }
 
 		// Constructor from 2D initializer list of Tile*
 		TileMap(std::initializer_list<std::initializer_list<Tile*>> rows) :
@@ -94,7 +102,7 @@ namespace Game
 
 		bool mIsRunning = true;
 		TileMap mTileMap = TileMap(1, 1);
-		std::array<unsigned short, 6> mColors =
+		std::array<unsigned long, 6> mColors =
 		{
 			FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE,
 			FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE,

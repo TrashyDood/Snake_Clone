@@ -93,9 +93,12 @@ namespace Game
 
 		void OnDraw(GameState& pGame, GameTime& pTime)
 		{
-			//clearBuffer();
+			clearBuffer();
 
-			//renderBuffers();
+			DrawTileMap(pGame.mTileMap);
+			//DrawTile(pGame.mTileTypes[TileID::Wall], { 5, 8 });
+
+			renderBuffers();
 		}
 
 		void OnExit(GameState& pGame, GameTime& pTime) { deleteCustomConsole(); }
@@ -107,15 +110,15 @@ namespace Game
 
 		void DrawTile(Tile* pTile, Coord pCoords)
 		{
-			if (!pTile)
-				throw std::runtime_error("Tile is null!");
-
-			drawTile(pCoords.x, pCoords.y, pTile->mSymbol, pTile->mColor);
+			if (pTile)
+				drawTile(pCoords.x, pCoords.y, pTile->mSymbol, pTile->mColor);
 		}
 
 		void DrawTileMap(TileMap& pTileMap)
 		{
-
+			for (size_t y = 0; y < pTileMap.mWidth; y++)
+				for (size_t x = 0; x < pTileMap.mHeight; x++)
+					DrawTile(pTileMap(x, y), { x, y });
 		}
 	}
 
@@ -133,7 +136,22 @@ namespace Game
 
 		TileMap GenTileMap(GameState& pGame)
 		{
-			return TileMap(0, 0);
+			TileMap map = TileMap(20, 20);
+			Tile* tile = &(pGame.mTileTypes[TileID::Wall]);
+
+			for (size_t i = 0; i < map.mWidth; i++)
+			{
+				map(i, 0) = tile;
+				map(i, map.mHeight - 1) = tile;
+			}
+
+			for (size_t i = 0; i < map.mHeight; i++)
+			{
+				map(0, i) = tile;
+				map(map.mWidth - 1, i) = tile;
+			}
+
+			return map;
 		}
 
 		Tile& GetTileType(GameState& pGame, unsigned short pId) { return pGame.mTileTypes[pId]; }
