@@ -41,6 +41,7 @@
 #define DEFAULT_WIDTH  120
 #define DEFAULT_HEIGHT 30
 
+inline constexpr COORD defCoord = { 0, 0 };
 inline const int screen_width  = DEFAULT_WIDTH;
 inline const int screen_height = DEFAULT_HEIGHT;
 inline const int buffer_size   = DEFAULT_WIDTH * DEFAULT_HEIGHT;
@@ -100,13 +101,13 @@ inline void deleteCustomConsole() {
 }
 
 // Renders both buffers. Should probably be called renderBuffers...
-inline void renderBuffer() {
+inline void renderBuffers(COORD pCoord = defCoord) {
 
     if (active_handle) {
 
         DWORD written = 0;
-        WriteConsoleOutputCharacterA(GetStdHandle(STD_OUTPUT_HANDLE), screen_buffer, buffer_size, { 0, 0 }, &written);
-        WriteConsoleOutputAttribute(GetStdHandle(STD_OUTPUT_HANDLE), colors_buffer, buffer_size, { 0, 0 }, &written);
+        WriteConsoleOutputCharacterA(GetStdHandle(STD_OUTPUT_HANDLE), screen_buffer, buffer_size, pCoord, &written);
+        WriteConsoleOutputAttribute(GetStdHandle(STD_OUTPUT_HANDLE), colors_buffer, buffer_size, pCoord, &written);
 
     } else { std::cerr << "Warning - Trying to render an uninitialized buffer - Call setupCustomConsole First!" << std::endl; }
 }
@@ -161,5 +162,4 @@ inline int getIfEnterKeyIsCurrentlyDown() { return GetAsyncKeyState(VK_RETURN) &
 inline int getIfBackKeyIsCurrentlyDown() { return GetAsyncKeyState(VK_BACK) & 0x8000; }
 inline int getIfEscKeyIsCurrentlyDown() { return GetAsyncKeyState(VK_ESCAPE) & 0x8000; }
 #pragma endregion
-
 #endif

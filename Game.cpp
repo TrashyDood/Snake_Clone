@@ -1,5 +1,4 @@
 #include "Game.h"
-#include "console_renderer.h"
 #include <iostream>
 
 #define WRITELINE(x) std::cout << x << "\n" 
@@ -11,8 +10,10 @@ namespace Game
 {
 	void Run()
 	{
+		using namespace Core;
+
 		GameTime time(duration<float>(1.0f / 30));
-		GameState game(time);
+		GameState game{};
 
 		OnInit(game);
 
@@ -38,64 +39,92 @@ namespace Game
 
 				accumulator -= time.mFixedTimeStep;
 
-				OnFixedTick(game);
-				OnDraw(game);
+				OnFixedTick(game, time);
+				OnDraw(game, time);
 			}
 
-			OnTick(game);
+			OnTick(game, time);
 		}
 
-		OnExit(game);
+		OnExit(game, time);
 	}
 
-	void OnInit(GameState& pGame)
+	namespace Core
 	{
-		// initialize
+		using namespace Game::Draw;
 
-		setupCustomConsole();
+		void OnInit(GameState& pGame)
+		{
+			// initialize tile types.
+			pGame.mTileLookup.clear();
+			for (size_t i = 0; i < pGame.mTileTypes.size(); i++)
+			{
+				Tile& tileType = pGame.mTileTypes[i];
+
+				std::string symbol(1, tileType.mSymbol);
+				pGame.mTileLookup[symbol] = i;
+				pGame.mTileLookup[tileType.mName] = i;
+			}
+
+			setupCustomConsole();
+		}
+
+		void OnTick(GameState& pGame, GameTime& pTime)
+		{
+			// input logic.
+
+			if (getIfRightKeyIsCurrentlyDown())
+				pGame.mPlayer1.mDirX = 1;
+			else if (getIfLeftKeyIsCurrentlyDown())
+				pGame.mPlayer1.mDirX = -1;
+			else
+				pGame.mPlayer1.mDirX = 0;
+
+			if (getIfUpKeyIsCurrentlyDown())
+				pGame.mPlayer1.mDirY = -1;
+			else if (getIfDownKeyIsCurrentlyDown())
+				pGame.mPlayer1.mDirY = 1;
+			else
+				pGame.mPlayer1.mDirY = 0;
+		}
+
+		void OnFixedTick(GameState& pGame, GameTime& pTime)
+		{
+			pGame.mPlayer1.mPosX += pGame.mPlayer1.mDirX *
+				pTime.mFixedDeltaTime * pGame.mPlayer1.mSpeed;
+
+			pGame.mPlayer1.mPosY += pGame.mPlayer1.mDirY *
+				pTime.mFixedDeltaTime * pGame.mPlayer1.mSpeed;
+		}
+
+		void OnDraw(GameState& pGame, GameTime& pTime)
+		{
+			clearBuffer();
+
+			DrawTileMap(pGame.mTileMap, screen_width, screen_height);
+			Mechanics::GetTileType(pGame, TileID::Snake);
+
+			renderBuffers({3, 0});
+		}
+
+		void OnExit(GameState& pGame, GameTime& pTime) { deleteCustomConsole(); }
 	}
 
-	void OnTick(GameState& pGame)
+	namespace Draw
 	{
-		// input logic.
+		void DrawTile(Tile& pTile, size_t x, size_t y) { drawTile(x, y, pTile.mSymbol, pTile.mColor); }
 
-		if (getIfRightKeyIsCurrentlyDown())
-			pGame.mPlayer.mDirX = 1;
-		else if (getIfLeftKeyIsCurrentlyDown())
-			pGame.mPlayer.mDirX = -1;
-		else
-			pGame.mPlayer.mDirX = 0;
-
-		if (getIfUpKeyIsCurrentlyDown())
-			pGame.mPlayer.mDirY = -1;
-		else if (getIfDownKeyIsCurrentlyDown())
-			pGame.mPlayer.mDirY = 1;
-		else
-			pGame.mPlayer.mDirY = 0;
+		void DrawTileMap(TileMap& mTileMap, size_t width, size_t height, size_t x, size_t y)
+		{
+			for (size_t x = 0; x < width; x++)
+				for (size_t y = 0; y < height; y++)
+					DrawTile(mTileMap[(x + width * y)], x, y);
+		}
 	}
 
-	void OnFixedTick(GameState& pGame)
+	namespace Mechanics
 	{
-		pGame.mPlayer.mPosX += pGame.mPlayer.mDirX *
-			pGame.mTime.mFixedDeltaTime * pGame.mPlayer.mSpeed;
-
-		pGame.mPlayer.mPosY += pGame.mPlayer.mDirY *
-			pGame.mTime.mFixedDeltaTime * pGame.mPlayer.mSpeed;
-	}
-
-	void OnDraw(GameState& pGame)
-	{
-		clearBuffer();
-
-		// add to buffer.
-		drawTile((size_t)pGame.mPlayer.mPosX, (size_t)pGame.mPlayer.mPosY, '0');
-
-		renderBuffer();
-	}
-
-	void OnExit(GameState& pGame)
-	{
-		// cleanup.
-		deleteCustomConsole();
+		Tile& GetTileType(GameState& pGame, unsigned short pId) { return pGame.mTileTypes[pId]; }
+		Tile& GetTileType(GameState& pGame, std::string pName) { return GetTileType(pGame, pGame.mTileLookup[pName]); }
 	}
 }
