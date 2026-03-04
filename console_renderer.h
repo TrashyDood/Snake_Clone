@@ -112,20 +112,19 @@ inline void renderBuffers(COORD pCoord = defCoord) {
     } else { std::cerr << "Warning - Trying to render an uninitialized buffer - Call setupCustomConsole First!" << std::endl; }
 }
 
-// Memory safe if you input invalid coordinates.
-inline void drawTile(int x, int y, char c, unsigned short colors) {
-
+inline void drawTile(unsigned int pIndex, char pSymbol, unsigned short pColors = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE) {
     if (active_handle)
     {
-        size_t index = (((y * screen_width + x) % buffer_size) + buffer_size) % buffer_size; // Overflow wrap.
-
-        screen_buffer[index] = c;
-        colors_buffer[index] = colors;
-
-    } else { std::cerr << "Warning - Trying to modify an uninitialized buffer - Call setupCustomConsole First!" << std::endl; }
+        screen_buffer[pIndex] = pSymbol;
+        colors_buffer[pIndex] = pColors;
+    }
+    else { std::cerr << "Warning - Trying to modify an uninitialized buffer - Call setupCustomConsole First!" << std::endl; }
 }
 
-inline void drawTile(int x, int y, char c) { drawTile(x, y, c, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE); }
+// Memory safe if you input invalid coordinates.
+inline void drawTile(unsigned int pX, unsigned int pY, char pSymbol, unsigned short pColors = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE) {
+    drawTile(pX + pY * screen_width, pSymbol, pColors);
+}
 
 // NOT MEMORY SAFE, this function can overflow the buffer...
 inline void drawString(int x, int y, std::string s, unsigned short colors) {

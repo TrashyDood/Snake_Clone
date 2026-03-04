@@ -8,6 +8,6 @@ using namespace std::chrono;
 
 void main()
 {
-	Game::Run();
+	while(Game::RunGame() > -1) {}
 }
 

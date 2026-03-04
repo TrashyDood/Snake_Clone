@@ -2,6 +2,7 @@
 #include "Utils.h"
 #include <iostream>
 #include <stdexcept>
+#include <cmath>
 
 #define WRITELINE(x) std::cout << x << "\n" 
 #define WRITE(x) std::cout << x;
@@ -10,26 +11,26 @@ using namespace std::chrono;
 
 namespace Game
 {
-	void Run()
+	RunState RunGame()
 	{
 		using namespace Core;
 
 		GameState game{};
 		GameTime time{};
-		GameTime fixedTime{ duration<float>(1.0f / 30) };
+		GameTime fixedTime{ duration<float>(1.0f / 8) };
 
 		OnInit(game);
 
 		steady_clock::time_point previousTime = steady_clock::now();
 		duration<float> accumulator(0.0f);
 
-		while (game.mIsRunning) // Game loop.
+		while (game.pRunState == 0) // Game loop.
 		{
 			time.mTime = steady_clock::now();
 			time.mTimeStep = time.mTime - previousTime;
+			previousTime = time.mTime;
 			time.mDeltaTime = time.mTimeStep.count();
 
-			previousTime = time.mTime;
 			accumulator += time.mTimeStep;
 
 			if (time.mTimeStep.count() > 0.25) // Guard against spiral of death.
@@ -49,79 +50,64 @@ namespace Game
 			}
 		}
 
-		OnExit(game, time);
+		return OnExit(game, time);
+	}
+
+	void ExitGame(GameState& pGame, RunState pExitState)
+	{
+		pGame.pRunState = pExitState;
 	}
 
 	namespace Core
 	{
 		using namespace Game::Draw;
 		using namespace Game::Mechanics;
+		using namespace Game::Player;
 
 		void OnInit(GameState& pGame)
 		{
 			setupCustomConsole();
 			InitTiles(pGame);
-			InitPlayer(pGame);
-			pGame.mTileMap = GenTileMap(pGame);
+			InitPlayer(pGame.mPlayer);
+			GenTileMap(pGame);
 		}
 
-		void OnTick(GameState& pGame, GameTime& pTime)
+		void OnTick(GameState& pGame, const GameTime& pTime)
 		{
-			int inputX =
-				Math::Clamp(getIfRightKeyIsCurrentlyDown())
-				- Math::Clamp(getIfLeftKeyIsCurrentlyDown());
-			int inputY =
-				Math::Clamp(getIfUpKeyIsCurrentlyDown())
-				- Math::Clamp(getIfDownKeyIsCurrentlyDown());
-
-			if (inputX != 0)
-			{
-				pGame.mInput.mVertical = 0;
-				pGame.mInput.mHorizontal = inputX;
-			}
-			if (inputY != 0)
-			{
-				pGame.mInput.mHorizontal = 0;
-				pGame.mInput.mVertical = inputY;
-			}
+			TickInput(pGame, pTime);
 		}
 
-		void OnFixedTick(GameState& pGame, GameTime& pTime)
+		void OnFixedTick(GameState& pGame, const GameTime& pTime)
 		{
-			pGame.mPlayer.mVelocity = { pGame.mInput.mHorizontal * pTime.mDeltaTime * pGame.mPlayer.mSpeed,
-				pGame.mInput.mVertical * pTime.mDeltaTime * pGame.mPlayer.mSpeed };
-
-			PlayerPos newPos = pGame.mPlayer.mPositions.back() + pGame.mPlayer.mVelocity;
-			pGame.mPlayer.mPositions.push_back(newPos);
-			pGame.mPlayer.mPositions.pop_front();
+			TickPlayer(pGame, pTime, pGame.mPlayer);
 		}
 
-		void OnDraw(GameState& pGame, GameTime& pTime)
+		void OnDraw(GameState& pGame, const GameTime& pTime)
 		{
 			clearBuffer();
 
 			DrawTileMap(pGame.mTileMap);
-			
-			for (auto& pos : pGame.mPlayer.mPositions)
-				DrawTile(GetTileType(pGame, TileID::Snake), pos.x, pos.y);
 
 			renderBuffers();
 		}
 
-		void OnExit(GameState& pGame, GameTime& pTime) { deleteCustomConsole(); }
+		RunState OnExit(GameState& pGame, const GameTime& pTime)
+		{ 
+			deleteCustomConsole();
+			return pGame.pRunState;
+		}
 	}
 
 	namespace Draw
 	{
-		void DrawTile(Tile& pTile, unsigned int pX, unsigned int pY) { drawTile(pX, pY, pTile.mSymbol, pTile.mColor); }
-
-		void DrawTile(Tile* pTile, unsigned int pX, unsigned int pY) { if (pTile) drawTile(pX, pY, pTile->mSymbol, pTile->mColor); }
-
+		void DrawTile(Tile* pTile, const unsigned int pPosition) { if (pTile) drawTile(pPosition, pTile->mSymbol, pTile->mColor); }
+		void DrawTile(Tile* pTile, const unsigned int pX, const unsigned int pY) { if (pTile)drawTile(pX, pY, pTile->mSymbol, pTile->mColor); }
+		
 		void DrawTileMap(TileMap& pTileMap)
 		{
-			for (int y = 0; y < pTileMap.mWidth; y++)
-				for (int x = 0; x < pTileMap.mHeight; x++)
-					DrawTile(pTileMap(x, y), x, y);
+			for (size_t x = 0; x < pTileMap.mWidth; x++)
+				for (size_t y = 0; y < pTileMap.mHeight; y++)
+					DrawTile(pTileMap[pTileMap(x, y)], x, y);
 		}
 	}
 
@@ -137,33 +123,75 @@ namespace Game
 			}
 		}
 
-		void InitPlayer(GameState& pGame)
+		void GenTileMap(GameState& pGame)
 		{
-			pGame.mPlayer.mPositions.push_back({ 0, 0 });
-			pGame.mPlayer.mPositions.push_back({ 1, 0 });
-			pGame.mPlayer.mPositions.push_back({ 2, 0 });
-		}
-
-		TileMap GenTileMap(GameState& pGame)
-		{
-			TileMap map = TileMap(20, 20);
-			Tile* wall = &(pGame.mTileTypes[TileID::Wall]);
+			TileMap map = TileMap(60, 30);
+			Tile* wall = &pGame.mTileTypes[TileID::Wall];
 
 			for (size_t i = 0; i < map.mWidth; i++)
 			{
-				map(i, 0) = wall;
-				map(i, map.mHeight - 1) = wall;
+				map[map(i, 0)] = wall;
+				map[map(i, map.mHeight - 1)] = wall;
 			}
 
 			for (size_t i = 0; i < map.mHeight; i++)
 			{
-				map(0, i) = wall;
-				map(map.mWidth - 1, i) = wall;
+				map[map(0, i)] = wall;
+				map[map(map.mWidth - 1, i)] = wall;
 			}
 
-			return map;
+			pGame.mTileMap = map;
 		}
 
-		Tile& GetTileType(GameState& pGame, unsigned short pId) { return pGame.mTileTypes[pId]; }
+		Tile& GetTileType(GameState& pGame, const unsigned short pId) { return pGame.mTileTypes[pId]; }
+		Tile* GetTile(GameState& pGame, const Vector2F pCoords) { return pGame.mTileMap(pCoords); }
+		void SetTile(GameState& pGame, const Vector2F pCoords, Tile* pTile) { pGame.mTileMap(pCoords) = pTile; }
+	}
+
+	namespace Player
+	{
+		using namespace Game::Mechanics;
+
+		void InitPlayer(PlayerSnake& pPlayer)
+		{
+			pPlayer.mPositions.push_back({ 5, 5 });
+			pPlayer.mPositions.push_back({ 5, 6 });
+			pPlayer.mPositions.push_back({ 5, 7 });
+		}
+
+		void TickPlayer(GameState& pGame, const GameTime& pTime, PlayerSnake& pPlayer)
+		{
+
+		}
+
+		void AddToPlayer(PlayerSnake& pPlayer, unsigned short amount)
+		{
+
+		}
+
+		void TickInput(GameState& pGame, const GameTime& pTime)
+		{
+			int inputX =
+				Math::Clamp(getIfRightKeyIsCurrentlyDown())
+				- Math::Clamp(getIfLeftKeyIsCurrentlyDown());
+			int inputY =
+				Math::Clamp(getIfDownKeyIsCurrentlyDown())
+				- Math::Clamp(getIfUpKeyIsCurrentlyDown());
+
+			if (inputX != 0)
+			{
+				pGame.mInput.y = 0;
+				pGame.mInput.x = inputX;
+			}
+
+			if (inputY != 0)
+			{
+				pGame.mInput.x = 0;
+				pGame.mInput.y = inputY;
+			}
+
+			if (getIfSpaceKeyIsCurrentlyDown())
+				AddToPlayer(pGame.mPlayer);
+		}
 	}
 }

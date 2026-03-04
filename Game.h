@@ -5,6 +5,7 @@
 #include <array>
 #include <vector>
 #include <deque>
+#include <cmath>
 
 using namespace std::chrono;
 
@@ -17,32 +18,38 @@ namespace Game
 		float mDeltaTime = 0;
 	};
 
-	//template<typename T>
-	//struct Vector2
-	//{
-	//	T x, y;
+	struct Vector2F
+	{
+		float x = 0,
+			y = 0;
 
-	//	template<typename U>
-	//	auto operator-(const Vector2<U>& pOther) -> Vector2<decltype(x - pOther.x)> { return { x - pOther.x, y - pOther.y }; }
-	//	template<typename U>
-	//	auto operator+(const Vector2<U>& pOther) -> Vector2<decltype(x + pOther.x)> { return { x + pOther.x, y + pOther.y }; }
-	//	template<typename U>
-	//	auto operator*(const U pMultiplier) const -> Vector2<decltype(x* pMultiplier)> { return { x * pMultiplier, y * pMultiplier }; }
-	//	template<typename U>
-	//	auto operator/(const U pDivisor) const -> Vector2<decltype(x / pDivisor)> { return { x / pDivisor, y / pDivisor }; }
+		template<typename T>
+		const Vector2F operator*(const T& pMultiplier) const { return { x * pMultiplier, y * pMultiplier }; }
+		const Vector2F operator+(const Vector2F& pOther) const { return { x + pOther.x, y + pOther.y }; }
+		const Vector2F operator-(const Vector2F& pOther) const { return { x - pOther.x, y - pOther.y }; }
 
-	//	Vector2(T pX = 0, T pY = 0) : x(pX), y(pY) {}
-	//};
+		const Vector2F& operator+=(const Vector2F& pOther)
+		{
+			x += pOther.x;
+			y += pOther.y;
+			return *this;
+		}
 
-	//struct Vector2I32 : Vector2<int>
-	//{
-	//	using Vector2::Vector2;
-	//};
+		template<typename T>
+		const Vector2F& operator*=(const T& pMultiplier)
+		{
+			x *= pMultiplier;
+			y *= pMultiplier;
+			return *this;
+		}
+	};
 
-	//struct Vector2F64 : Vector2<float>
-	//{
-	//	using Vector2::Vector2;
-	//};
+	enum RunState : int
+	{
+		Exit = -1,
+		Running = 0,
+		Restart = 1
+	};
 
 	enum ColorID : unsigned short
 	{
@@ -76,73 +83,41 @@ namespace Game
 		}
 	};
 
-	// Heap allocated tile map.
 	struct TileMap
 	{
 		std::vector<Tile*> mTiles;
-		unsigned int mWidth = 0, mHeight = 0;
+		unsigned int mWidth, mHeight, mSize;
 
-		Tile*& operator()(unsigned int x, unsigned int y) { return mTiles[x + y * mWidth]; }
+		constexpr unsigned int operator()(unsigned int pX, unsigned int pY)
+		{ 
+			pX = (((pX) % mWidth) + mWidth) % mWidth;
+			pY = (((pY) % mHeight) + mHeight) % mHeight;
 
-		TileMap(unsigned int pWidth, unsigned int pHeight) :
-			mWidth(pWidth), mHeight(pHeight) { mTiles.resize(pWidth * pHeight, nullptr); }
-
-		// Constructor from 2D initializer list of Tile*
-		TileMap(std::initializer_list<std::initializer_list<Tile*>> rows) :
-			mWidth(rows.begin()->size()), mHeight(rows.size())
-		{
-			if (mHeight == 0)
-				throw std::invalid_argument("TileMap cannot have zero height");
-
-			mTiles.resize(mWidth * mHeight);
-
-			unsigned int y = 0;
-			for (auto& row : rows)
-			{
-				if (row.size() != mWidth)
-					throw std::invalid_argument("All rows must have the same width");
-
-				unsigned int x = 0;
-				for (Tile* t : row)
-					mTiles[x++ + y * mWidth] = t;
-
-				++y;
-			}
+			return (pY * mWidth) + pX;
 		}
+
+		Tile*& operator[](const unsigned int pIndex) { return mTiles[pIndex]; }
+		Tile*& operator()(const Vector2F pCoords) { return mTiles[operator()((unsigned int)round(pCoords.x), (unsigned int)round(pCoords.y))]; }
+
+		TileMap(const unsigned int pWidth = 20, const unsigned int pHeight = 20) :
+			mWidth(pWidth), mHeight(pHeight), mSize(pWidth * pHeight), mTiles(pWidth* pHeight, nullptr) { }
 	};
 
-	struct PlayerPos
+	struct PlayerSnake
 	{
-		float x = 0,
-			y = 0;
-
-		const PlayerPos operator+(PlayerPos& pOther) const { return { x + pOther.x, y + pOther.y }; }
+		float mSpeed = 3;
+		Vector2F mDirection{};
+		std::deque<Vector2F> mPositions;
 	};
 
 	struct GameState
 	{
-		struct
-		{
-			float mSpeed;
-			PlayerPos mVelocity = { 1, 0 };
-			std::deque<PlayerPos> mPositions;
-		} mPlayer;
-		struct
-		{
-			float mHorizontal = 0,
-				mVertical = -1;
-		} mInput;
+		PlayerSnake mPlayer;
+		Vector2F mInput{ 0, 1 };
 
-		bool mIsRunning = true;
-		TileMap mTileMap = TileMap(1, 1);
-		std::array<unsigned long, 6> mColors =
-		{
-			FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE,
-			FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE,
-			FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE,
-			FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE,
-			FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE,
-		};
+		RunState pRunState = RunState::Running;
+
+		TileMap mTileMap;
 		std::array<Tile, 6> mTileTypes =
 		{
 			Tile{ '#', FOREGROUND_GREEN | FOREGROUND_BLUE },
@@ -154,30 +129,40 @@ namespace Game
 		};
 	};
 
-	void Run();
+	RunState RunGame();
+	void ExitGame(GameState& pGame, RunState pExitState = RunState::Exit);
 
 	namespace Core
 	{
 		void OnInit(GameState& pGame);
-		void OnTick(GameState& pGame, GameTime& pTime);
-		void OnFixedTick(GameState& pGame, GameTime& pTime);
-		void OnDraw(GameState& pGame, GameTime& pTime);
-		void OnExit(GameState& pGame, GameTime& pTime);
+		void OnTick(GameState& pGame, const GameTime& pTime);
+		void OnFixedTick(GameState& pGame, const GameTime& pTime);
+		void OnDraw(GameState& pGame, const GameTime& pTime);
+		RunState OnExit(GameState& pGame, const GameTime& pTime);
 	}
 
 	namespace Draw
 	{
-		void DrawTile(Tile& pTile, unsigned int pX, unsigned int pY);
-		void DrawTile(Tile* pTile, unsigned int pX, unsigned int pY);
+		void DrawTile(Tile* pTile, const unsigned int pPosition);
+		void DrawTile(Tile* pTile, const unsigned int pX, const unsigned int pY);
 		void DrawTileMap(TileMap& pTileMap);
 	}
 
 	namespace Mechanics
 	{
 		void InitTiles(GameState& pGame);
-		void InitPlayer(GameState& pGame);
-		TileMap GenTileMap(GameState& pGame);
-		Tile& GetTileType(GameState& pGame, unsigned short pId);
+		void GenTileMap(GameState& pGame);
+		Tile& GetTileType(GameState& pGame, const unsigned short pId);
+		Tile* GetTile(GameState& pGame, const Vector2F pCoords);
+		void SetTile(GameState& pGame, const Vector2F pCoords, Tile* pTile);
+	}
+
+	namespace Player
+	{
+		void InitPlayer(PlayerSnake& pPlayer);
+		void TickPlayer(GameState& pGame, const GameTime& pTime, PlayerSnake& pPlayer);
+		void AddToPlayer(PlayerSnake& pPlayer, unsigned short amount = 1);
+		void TickInput(GameState& pGame, const GameTime& pTime);
 	}
 }
 
