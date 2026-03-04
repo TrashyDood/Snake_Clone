@@ -2,10 +2,9 @@
 
 #include "console_renderer.h"
 #include <chrono>
-#include <unordered_map>
-#include <string>
 #include <array>
 #include <vector>
+#include <deque>
 
 using namespace std::chrono;
 
@@ -18,14 +17,32 @@ namespace Game
 		float mDeltaTime = 0;
 	};
 
-	struct Coord
-	{
-		size_t x, y;
+	//template<typename T>
+	//struct Vector2
+	//{
+	//	T x, y;
 
-		Coord operator+(Coord& pOther) { return Coord(x + pOther.x, y + pOther.y); }
-		Coord operator-(Coord& pOther) { return Coord(x - pOther.x, y - pOther.y); }
+	//	template<typename U>
+	//	auto operator-(const Vector2<U>& pOther) -> Vector2<decltype(x - pOther.x)> { return { x - pOther.x, y - pOther.y }; }
+	//	template<typename U>
+	//	auto operator+(const Vector2<U>& pOther) -> Vector2<decltype(x + pOther.x)> { return { x + pOther.x, y + pOther.y }; }
+	//	template<typename U>
+	//	auto operator*(const U pMultiplier) const -> Vector2<decltype(x* pMultiplier)> { return { x * pMultiplier, y * pMultiplier }; }
+	//	template<typename U>
+	//	auto operator/(const U pDivisor) const -> Vector2<decltype(x / pDivisor)> { return { x / pDivisor, y / pDivisor }; }
 
-	};
+	//	Vector2(T pX = 0, T pY = 0) : x(pX), y(pY) {}
+	//};
+
+	//struct Vector2I32 : Vector2<int>
+	//{
+	//	using Vector2::Vector2;
+	//};
+
+	//struct Vector2F64 : Vector2<float>
+	//{
+	//	using Vector2::Vector2;
+	//};
 
 	enum ColorID : unsigned short
 	{
@@ -49,22 +66,25 @@ namespace Game
 	{
 		char mSymbol;
 		unsigned long mColor;
-		bool mIsPassable = false;
 		unsigned short mId = 0;
+
+		const bool operator==(const Tile& pOther) const
+		{
+			return mId == pOther.mId &&
+				mSymbol == pOther.mSymbol &&
+				mColor == pOther.mColor;
+		}
 	};
 
 	// Heap allocated tile map.
 	struct TileMap
 	{
 		std::vector<Tile*> mTiles;
-		size_t mWidth = 0, mHeight = 0;
+		unsigned int mWidth = 0, mHeight = 0;
 
-		Tile*& operator()(size_t x, size_t y) { return mTiles[x + y * mWidth]; }
-		Tile* operator()(size_t x, size_t y) const { return mTiles[x + y * mWidth]; }
-		Tile*& operator[](Coord c) { return mTiles[c.x + c.y * mWidth]; }
-		Tile* operator[](Coord c) const { return mTiles[c.x + c.y * mWidth]; }
+		Tile*& operator()(unsigned int x, unsigned int y) { return mTiles[x + y * mWidth]; }
 
-		TileMap(size_t pWidth, size_t pHeight) :
+		TileMap(unsigned int pWidth, unsigned int pHeight) :
 			mWidth(pWidth), mHeight(pHeight) { mTiles.resize(pWidth * pHeight, nullptr); }
 
 		// Constructor from 2D initializer list of Tile*
@@ -76,13 +96,13 @@ namespace Game
 
 			mTiles.resize(mWidth * mHeight);
 
-			size_t y = 0;
+			unsigned int y = 0;
 			for (auto& row : rows)
 			{
 				if (row.size() != mWidth)
 					throw std::invalid_argument("All rows must have the same width");
 
-				size_t x = 0;
+				unsigned int x = 0;
 				for (Tile* t : row)
 					mTiles[x++ + y * mWidth] = t;
 
@@ -91,14 +111,27 @@ namespace Game
 		}
 	};
 
+	struct PlayerPos
+	{
+		float x = 0,
+			y = 0;
+
+		const PlayerPos operator+(PlayerPos& pOther) const { return { x + pOther.x, y + pOther.y }; }
+	};
+
 	struct GameState
 	{
 		struct
 		{
-			float mSpeed = 7,
-				mDirX = 0, mDirY = 0,
-				mPosX = 0, mPosY = 0;
-		} mPlayer1, mPlayer2, mPlayer3, mPlayer4;
+			float mSpeed;
+			PlayerPos mVelocity = { 1, 0 };
+			std::deque<PlayerPos> mPositions;
+		} mPlayer;
+		struct
+		{
+			float mHorizontal = 0,
+				mVertical = -1;
+		} mInput;
 
 		bool mIsRunning = true;
 		TileMap mTileMap = TileMap(1, 1);
@@ -112,9 +145,9 @@ namespace Game
 		};
 		std::array<Tile, 6> mTileTypes =
 		{
-			Tile{ '#', FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE },
+			Tile{ '#', FOREGROUND_GREEN | FOREGROUND_BLUE },
 			Tile{ 'P', FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE },
-			Tile{ '0', FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE },
+			Tile{ '0', FOREGROUND_RED | FOREGROUND_GREEN },
 			Tile{ '0', FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE },
 			Tile{ '0', FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE },
 			Tile{ '0', FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE },
@@ -134,14 +167,15 @@ namespace Game
 
 	namespace Draw
 	{
-		void DrawTile(Tile& pTile, Coord pCoords);
-		void DrawTile(Tile* pTile, Coord pCoords);
+		void DrawTile(Tile& pTile, unsigned int pX, unsigned int pY);
+		void DrawTile(Tile* pTile, unsigned int pX, unsigned int pY);
 		void DrawTileMap(TileMap& pTileMap);
 	}
 
 	namespace Mechanics
 	{
 		void InitTiles(GameState& pGame);
+		void InitPlayer(GameState& pGame);
 		TileMap GenTileMap(GameState& pGame);
 		Tile& GetTileType(GameState& pGame, unsigned short pId);
 	}

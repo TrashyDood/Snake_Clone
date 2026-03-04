@@ -115,12 +115,12 @@ inline void renderBuffers(COORD pCoord = defCoord) {
 // Memory safe if you input invalid coordinates.
 inline void drawTile(int x, int y, char c, unsigned short colors) {
 
-    if (active_handle) {
+    if (active_handle)
+    {
+        size_t index = (((y * screen_width + x) % buffer_size) + buffer_size) % buffer_size; // Overflow wrap.
 
-        if (x < 0 || x >= screen_width || y < 0 || y >= screen_height)  { std::cerr << "Warning - drawTile on nonexisting tile..." << std::endl; return; }
-
-        screen_buffer[y * screen_width + x] = c;
-        colors_buffer[y * screen_width + x] = colors;
+        screen_buffer[index] = c;
+        colors_buffer[index] = colors;
 
     } else { std::cerr << "Warning - Trying to modify an uninitialized buffer - Call setupCustomConsole First!" << std::endl; }
 }
