@@ -14,15 +14,25 @@
 #define DEFAULT_WIDTH  120
 #define DEFAULT_HEIGHT 30
 
-inline constexpr COORD defCoord = { 0, 0 };
-inline const int screen_width  = DEFAULT_WIDTH;
-inline const int screen_height = DEFAULT_HEIGHT;
+typedef unsigned short Color;
+inline constexpr COORD defaultCoord = { 0, 0 };
+
+inline int screen_width  = 0;
+inline int screen_height = 0;
 inline const int buffer_size   = DEFAULT_WIDTH * DEFAULT_HEIGHT;
 
 inline int active_handle = 0;
 
-inline char*           char_buffer = nullptr;
-inline unsigned short* color_buffer = nullptr;
+inline char* char_buffer = nullptr;
+inline Color* color_buffer = nullptr;
+
+inline void GetWindowSize(int& pWidth, int& pHeight)
+{
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
+    pWidth = csbi.srWindow.Right - csbi.srWindow.Left + 1;
+    pHeight = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
+}
 
 inline void fillBuffer(char c, char colors = 0) {
 
@@ -72,9 +82,11 @@ inline void deleteCustomConsole() {
     } else { std::cerr << "Warning - Called clearCustomConsole twice in a row" << std::endl; }
 }
 
-inline void renderBuffers(COORD pCoord = defCoord) {
+inline void renderBuffers(COORD pCoord = defaultCoord) {
 
     if (active_handle) {
+
+        GetWindowSize(screen_width, screen_height);
 
         DWORD written = 0;
         WriteConsoleOutputCharacterA(GetStdHandle(STD_OUTPUT_HANDLE), char_buffer, buffer_size, pCoord, &written);
@@ -83,19 +95,22 @@ inline void renderBuffers(COORD pCoord = defCoord) {
     } else { std::cerr << "Warning - Trying to render an uninitialized buffer - Call setupCustomConsole First!" << std::endl; }
 }
 
-inline void drawChar(char pChar, unsigned int pIndex, unsigned short pColors = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE) {
+inline void DrawChar(char pChar, unsigned int pIndex, Color pColor = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE)
+{
+    if (pIndex > buffer_size - 1)
+        return;
+
     if (active_handle)
     {
         char_buffer[pIndex] = pChar;
-        color_buffer[pIndex] = pColors;
+        color_buffer[pIndex] = pColor;
     }
-    else { std::cerr << "Warning - Trying to modify an uninitialized buffer - Call setupCustomConsole First!" << std::endl; }
+    else { std::cerr << "Warning - Accessing uninitialized buffer!" << std::endl; }
 }
 
-inline void drawCharCoord(char pChar, unsigned int pX, unsigned int pY, unsigned short pColors = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE) {
-    pX = (pX > screen_width - 1) ? screen_width - 1 : pX;
-    pY = (pY > screen_height - 1) ? screen_height - 1 : pY;
-    drawChar(pChar, pX + pY * screen_width, pColors);
+inline void DrawCharCoords(char pChar, unsigned int pX, unsigned int pY, Color pColor = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE)
+{ 
+    DrawChar(pChar, pX + pY * screen_width, pColor);
 }
 
 #pragma region input

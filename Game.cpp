@@ -1,5 +1,4 @@
 #include "Game.h"
-#include "Utils.h"
 #include <iostream>
 #include <stdexcept>
 #include <cmath>
@@ -16,38 +15,47 @@ namespace Game
 	{
 		using namespace Core;
 
-		GameState game{};
+		GameInstance game{};
 		GameTime time{};
 		GameTime fixedTime{ duration<float>(1.0f / 6) };
+		GameTime drawTime{ duration<float>(1.0f / 24) };
 
 		OnInit(game);
 
 		steady_clock::time_point previousTime = steady_clock::now();
-		duration<float> accumulator(0.0f);
+		duration<float> fixedAccumulator(0.0f), drawAccumulator(0.0f);
 
 		while (game.pRunId == RunID::Running) // Game loop.
 		{
 			time.mTime = steady_clock::now();
 			time.mTimeStep = time.mTime - previousTime;
-			previousTime = time.mTime;
 			time.mDeltaTime = time.mTimeStep.count();
+			previousTime = time.mTime;
 
-			accumulator += time.mTimeStep;
+			fixedAccumulator += time.mTimeStep;
+			drawAccumulator += time.mTimeStep;
 
-			if (time.mTimeStep.count() > 0.25) // Guard against spiral of death.
-				time.mTimeStep = duration<float>(0.25);
+			OnTick(game, time); // Normal tick.
 
-			OnTick(game, time);
-
-			while (accumulator >= fixedTime.mTimeStep) // Latency compensation.
+			while (fixedAccumulator >= fixedTime.mTimeStep) // Fixed tick.
 			{
 				fixedTime.mTime = steady_clock::now();
 				fixedTime.mDeltaTime = fixedTime.mTimeStep.count();
 
 				OnFixedTick(game, fixedTime);
-				OnDraw(game, fixedTime);
+				//OnDraw(game, fixedTime);
 
-				accumulator -= fixedTime.mTimeStep;
+				fixedAccumulator -= fixedTime.mTimeStep;
+			}
+
+			while (drawAccumulator >= drawTime.mTimeStep) // Draw tick.
+			{
+				drawTime.mTime = steady_clock::now();
+				drawTime.mDeltaTime = drawTime.mTimeStep.count();
+
+				OnDraw(game, drawTime);
+
+				drawAccumulator -= drawTime.mTimeStep;
 			}
 		}
 
@@ -60,7 +68,7 @@ namespace Game
 		using namespace Game::Mechanics;
 		using namespace Game::Player;
 
-		void OnInit(GameState& pGame)
+		void OnInit(GameInstance& pGame)
 		{
 			setupCustomConsole();
 			InitTiles(pGame);
@@ -68,26 +76,27 @@ namespace Game
 			GenTileMap(pGame);
 		}
 
-		void OnTick(GameState& pGame, const GameTime& pTime)
+		void OnTick(GameInstance& pGame, const GameTime& pTime)
 		{
 			TickInput(pGame, pTime, pGame.mPlayer);
 		}
 
-		void OnFixedTick(GameState& pGame, const GameTime& pTime)
+		void OnFixedTick(GameInstance& pGame, const GameTime& pTime)
 		{
 			TickPlayer(pGame, pTime, pGame.mPlayer);
 		}
 
-		void OnDraw(GameState& pGame, const GameTime& pTime)
+		void OnDraw(GameInstance& pGame, const GameTime& pTime)
 		{
 			clearBuffer();
 
-			DrawTileMap(pGame.mTileMap);
+			Rendering::DrawOutline('+', pGame.mTileMap.mWidth + 2, pGame.mTileMap.mHeight + 2, 0, 0);
+			DrawTileMap(pGame.mTileMap, 1, 1);
 
 			renderBuffers();
 		}
 
-		RunID OnExit(GameState& pGame, const GameTime& pTime)
+		RunID OnExit(GameInstance& pGame, const GameTime& pTime)
 		{ 
 			deleteCustomConsole();
 			return pGame.pRunId;
@@ -96,46 +105,48 @@ namespace Game
 
 	namespace Draw
 	{
-		void DrawTile(Tile* pTile, const unsigned int pX, const unsigned int pY) { if (pTile) drawCharCoord(pTile->mSymbol, pX, pY, pTile->mColor); }
-		void DrawTileMap(TileMap& pTileMap)
+		void DrawTile(Tile* pTile, const UINT32 pX, const UINT32 pY) { if (pTile) DrawCharCoords(pTile->mSymbol, pX, pY, pTile->mColor); }
+		void DrawTile(Tile& pTile, const UINT32 pX, const UINT32 pY) { DrawCharCoords(pTile.mSymbol, pX, pY, pTile.mColor); }
+
+		void DrawTileMap(TileMap& pTileMap, const UINT32 pOffsetX, const UINT32 pOffsetY)
 		{
 			for (size_t x = 0; x < pTileMap.mWidth; x++)
 				for (size_t y = 0; y < pTileMap.mHeight; y++)
-					DrawTile(pTileMap[pTileMap(x, y)], x, y);
+					DrawTile(pTileMap[pTileMap(x, y)], x + pOffsetX, y + pOffsetY);
 		}
 	}
 
 	namespace Mechanics
 	{
-		void InitTiles(GameState& pGame)
+		void InitTiles(GameInstance& pGame)
 		{
 			// initialize tile types.
-			for (size_t i = 0; i < pGame.mTileTypes.size(); i++)
+			for (size_t i = 0; i < pGame.mTiles.size(); i++)
 			{
-				Tile& tileType = pGame.mTileTypes[i];
+				Tile& tileType = pGame.mTiles[i];
 				tileType.mId = i;
 			}
 		}
 
-		void GenTileMap(GameState& pGame)
+		void GenTileMap(GameInstance& pGame)
 		{
-			TileMap map = TileMap(20, 10);
-			Tile* wall = &pGame.mTileTypes[TileID::Wall];
+			TileMap map = TileMap(15, 10);
+			Tile* wall = &pGame.mTiles[TileID::Wall];
 
-			for (size_t i = 0; i < map.mWidth; i++)
-			{
-				map[map(i, 0)] = wall;
-				map[map(i, map.mHeight - 1)] = wall;
-			}
+			//for (size_t i = 0; i < map.mWidth; i++)
+			//{
+			//	map[map(i, 0)] = wall;
+			//	map[map(i, map.mHeight - 1)] = wall;
+			//}
 
-			for (size_t i = 0; i < map.mHeight; i++)
-			{
-				map[map(0, i)] = wall;
-				map[map(map.mWidth - 1, i)] = wall;
-			}
+			//for (size_t i = 0; i < map.mHeight; i++)
+			//{
+			//	map[map(0, i)] = wall;
+			//	map[map(map.mWidth - 1, i)] = wall;
+			//}
 
 			pGame.mTileMap = map;
-			SpawnTileRandom(pGame.mTileMap, &pGame.mTileTypes[TileID::Fruit]);
+			SpawnTileRandom(pGame.mTileMap, &pGame.mTiles[TileID::Fruit]);
 		}
 
 		void SpawnTileRandom(TileMap& pTileMap, Tile* pTile)
@@ -158,38 +169,27 @@ namespace Game
 		using namespace Game::Mechanics;
 		using namespace Game;
 
-		void InitPlayer(GameState& pGame, PlayerSnake& pPlayer)
+		void InitPlayer(GameInstance& pGame, PlayerSnake& pPlayer)
 		{
 			pPlayer.mPositions.push_front({ 5,5 });
 			AddToPlayer(pGame, pPlayer, 1);
 		}
 
-		void AddToPlayer(GameState& pGame, PlayerSnake& pPlayer, unsigned short amount)
+		void AddToPlayer(GameInstance& pGame, PlayerSnake& pPlayer, unsigned short amount)
 		{
 			while (amount-- > 0)
 				pPlayer.mPositions.push_back(pPlayer.mPositions.back());
 		}
 
-		void TickPlayer(GameState& pGame, const GameTime& pTime, PlayerSnake& pPlayer)
+		void TickPlayer(GameInstance& pGame, const GameTime& pTime, PlayerSnake& pPlayer)
 		{
 			if (pPlayer.mPositions.empty()) return;
 
-			Tile* collidedTile = pGame.mTileMap[pGame.mTileMap(pPlayer.mPositions.front() + pPlayer.mDirection)];
+			Tile* collidedTile = pGame.mTileMap[pGame.mTileMap(
+				pPlayer.mPositions.front() + pPlayer.mDirection)];
 
-			if (collidedTile)
-			{
-				if (collidedTile->mId == TileID::Fruit)
-				{
-					AddToPlayer(pGame, pPlayer);
-					SpawnTileRandom(pGame.mTileMap, &pGame.mTileTypes[TileID::Fruit]);
-				}
-				else
-				{
-					pPlayer.isDead = true;
-					pGame.pRunId = RunID::Restart;
-					return;
-				}
-			}
+			if (collidedTile && collidedTile->mColEvent(pGame, pPlayer, collidedTile))
+				return;
 
 			Vector2Int oldTail = pPlayer.mPositions.back();
 			pGame.mTileMap[oldTail] = nullptr;
@@ -197,10 +197,10 @@ namespace Game
 
 			Vector2Int newHead = pGame.mTileMap(pPlayer.mPositions.front() + pPlayer.mDirection);
 			pPlayer.mPositions.push_front(newHead);
-			pGame.mTileMap[newHead] = &pGame.mTileTypes[TileID::Snake];
+			pGame.mTileMap[newHead] = &pGame.mTiles[TileID::Snake];
 		}
 
-		void TickInput(GameState& pGame, const GameTime& pTime, PlayerSnake& pPlayer)
+		void TickInput(GameInstance& pGame, const GameTime& pTime, PlayerSnake& pPlayer)
 		{
 			int inputX =
 				Math::Clamp(getIfRightKeyIsCurrentlyDown())
@@ -221,10 +221,27 @@ namespace Game
 				pPlayer.mDirection.y = inputY;
 			}
 		}
+	}
 
-		void OnCollided(GameState& pGame, PlayerSnake& pPlayer, Tile* pTile)
+	namespace CollisionEvents
+	{
+		using namespace Mechanics;
+		using namespace Player;
+
+		bool FruitCol(GameInstance& pGame, PlayerSnake& pPlayer, Tile* pTile)
 		{
+			AddToPlayer(pGame, pPlayer);
+			SpawnTileRandom(pGame.mTileMap, &pGame.mTiles[TileID::Fruit]);
 
+			return false;
+		}
+
+		bool DeathCol(GameInstance& pGame, PlayerSnake& pPlayer, Tile* pTile)
+		{
+			pPlayer.isDead = true;
+			pGame.pRunId = RunID::Restart;
+
+			return true;
 		}
 	}
 }

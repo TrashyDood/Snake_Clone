@@ -8,6 +8,5 @@ using namespace std::chrono;
 
 void main()
 {
-	while (Game::RunGame() != Game::RunID::Exit) {}
+	while (Game::RunGame() == Game::RunID::Restart) {}
 }
-

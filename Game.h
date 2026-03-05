@@ -1,6 +1,8 @@
 #pragma once
 
 #include "console_renderer.h"
+#include "Game.h"
+#include "Utils.h"
 #include <chrono>
 #include <array>
 #include <vector>
@@ -10,10 +12,38 @@
 using namespace std::chrono;
 
 typedef unsigned int TileIndex;
-typedef unsigned short ID;
+typedef unsigned short IDState;
 
 namespace Game
 {
+	// Too lazy to make new files.
+#pragma region Forward Declarations
+	struct GameInstance;
+	struct PlayerSnake;
+	struct Tile;
+	typedef bool (*CollisionEvent)(GameInstance&, PlayerSnake&, Tile*);
+
+	namespace CollisionEvents
+	{
+		bool FruitCol(GameInstance& pGame, PlayerSnake& pPlayer, Tile* pTile);
+		bool DeathCol(GameInstance& pGame, PlayerSnake& pPlayer, Tile* pTile);
+	}
+#pragma endregion
+
+	enum RunID : IDState
+	{
+		Exit = 0,
+		Running = 1,
+		Restart = 2
+	};
+
+	enum TileID : IDState
+	{
+		Wall = 0,
+		Fruit = 1,
+		Snake = 2,
+	};
+
 	struct Vector2Int
 	{
 		int x, y;
@@ -27,28 +57,12 @@ namespace Game
 		float mDeltaTime = 0;
 	};
 
-	enum RunID : ID
-	{
-		Exit = 0,
-		Running = 1,
-		Restart = 2
-	};
-
-	enum TileID : ID
-	{
-		Wall = 0,
-		Fruit = 1,
-		Snake = 2,
-		Snake1 = 3,
-		Snake2 = 4,
-		Snake4 = 5
-	};
-
 	struct Tile
 	{
 		char mSymbol;
 		unsigned long mColor;
-		ID mId = 0;
+		CollisionEvent mColEvent = CollisionEvents::DeathCol;
+		IDState mId = 0;
 
 		const bool operator==(const Tile& pOther) const
 		{
@@ -61,7 +75,7 @@ namespace Game
 	struct TileMap
 	{
 		std::vector<Tile*> mTiles;
-		unsigned int mWidth, mHeight, mSize;
+		UINT32 mWidth, mHeight, mSize;
 
 		Vector2Int operator()(Vector2Int pVector) const
 		{
@@ -99,7 +113,7 @@ namespace Game
 		Tile*& operator[](const Vector2Int pVector)
 		{ return operator[](pVector.x + pVector.y * mWidth); }
 
-		TileMap(const unsigned int pWidth = 20, const unsigned int pHeight = 20) :
+		TileMap(const UINT32 pWidth = 20, const UINT32 pHeight = 20) :
 			mWidth(pWidth), mHeight(pHeight), mSize(pWidth * pHeight), mTiles(pWidth * pHeight, nullptr) { }
 	};
 
@@ -110,21 +124,18 @@ namespace Game
 		std::deque<Vector2Int> mPositions{};
 	};
 
-	struct GameState
+	struct GameInstance
 	{
 		PlayerSnake mPlayer;
 		RunID pRunId = RunID::Running;
 		float fruitSpawnTimer = 0;
 
 		TileMap mTileMap;
-		std::array<Tile, 6> mTileTypes =
+		std::array<Tile, 3> mTiles =
 		{
 			Tile{ '#', FOREGROUND_GREEN | FOREGROUND_BLUE },
-			Tile{ '*', FOREGROUND_GREEN },
+			Tile{ '*', FOREGROUND_GREEN, CollisionEvents::FruitCol },
 			Tile{ '0', FOREGROUND_RED | FOREGROUND_GREEN },
-			Tile{ '0', FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE },
-			Tile{ '0', FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE },
-			Tile{ '0', FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE },
 		};
 	};
 
@@ -132,33 +143,33 @@ namespace Game
 
 	namespace Core
 	{
-		void OnInit(GameState& pGame);
-		void OnTick(GameState& pGame, const GameTime& pTime);
-		void OnFixedTick(GameState& pGame, const GameTime& pTime);
-		void OnDraw(GameState& pGame, const GameTime& pTime);
-		RunID OnExit(GameState& pGame, const GameTime& pTime);
+		void OnInit(GameInstance& pGame);
+		void OnTick(GameInstance& pGame, const GameTime& pTime);
+		void OnFixedTick(GameInstance& pGame, const GameTime& pTime);
+		void OnDraw(GameInstance& pGame, const GameTime& pTime);
+		RunID OnExit(GameInstance& pGame, const GameTime& pTime);
 	}
 
 	namespace Draw
 	{
-		void DrawTile(Tile* pTile, const unsigned int pX, const unsigned int pY);
-		void DrawTileMap(TileMap& pTileMap);
+		void DrawTile(Tile* pTile, const UINT32 pX, const UINT32 pY);
+		void DrawTile(Tile& pTile, const UINT32 pX, const UINT32 pY);
+		void DrawTileMap(TileMap& pTileMap, const UINT32 pOffsetX = 0, const UINT32 pOffsetY = 0);
 	}
 
 	namespace Mechanics
 	{
-		void InitTiles(GameState& pGame);
-		void GenTileMap(GameState& pGame);
+		void InitTiles(GameInstance& pGame);
+		void GenTileMap(GameInstance& pGame);
 		void SpawnTileRandom(TileMap& pTileMap, Tile* pTile);
 	}
 
 	namespace Player
 	{
-		void InitPlayer(GameState& pGame, PlayerSnake& pPlayer);
-		void AddToPlayer(GameState& pGame, PlayerSnake& pPlayer, unsigned short amount = 1);
-		void TickPlayer(GameState& pGame, const GameTime& pTime, PlayerSnake& pPlayer);
-		void TickInput(GameState& pGame, const GameTime& pTime, PlayerSnake& pPlayer);
-		void OnCollided(GameState& pGame, PlayerSnake& pPlayer, Tile* pTile);
+		void InitPlayer(GameInstance& pGame, PlayerSnake& pPlayer);
+		void AddToPlayer(GameInstance& pGame, PlayerSnake& pPlayer, unsigned short amount = 1);
+		void TickPlayer(GameInstance& pGame, const GameTime& pTime, PlayerSnake& pPlayer);
+		void TickInput(GameInstance& pGame, const GameTime& pTime, PlayerSnake& pPlayer);
 	}
 }
 
