@@ -3,6 +3,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <cmath>
+#include <random>
 
 #define WRITELINE(x) std::cout << x << "\n" 
 #define WRITE(x) std::cout << x;
@@ -11,7 +12,7 @@ using namespace std::chrono;
 
 namespace Game
 {
-	RunState RunGame()
+	RunID RunGame()
 	{
 		using namespace Core;
 
@@ -24,7 +25,7 @@ namespace Game
 		steady_clock::time_point previousTime = steady_clock::now();
 		duration<float> accumulator(0.0f);
 
-		while (game.pRunState == 0) // Game loop.
+		while (game.pRunId == RunID::Running) // Game loop.
 		{
 			time.mTime = steady_clock::now();
 			time.mTimeStep = time.mTime - previousTime;
@@ -53,11 +54,6 @@ namespace Game
 		return OnExit(game, time);
 	}
 
-	void ExitGame(GameState& pGame, RunState pExitState)
-	{
-		pGame.pRunState = pExitState;
-	}
-
 	namespace Core
 	{
 		using namespace Game::Draw;
@@ -68,13 +64,13 @@ namespace Game
 		{
 			setupCustomConsole();
 			InitTiles(pGame);
-			InitPlayer(pGame.mPlayer);
+			InitPlayer(pGame, pGame.mPlayer);
 			GenTileMap(pGame);
 		}
 
 		void OnTick(GameState& pGame, const GameTime& pTime)
 		{
-			TickInput(pGame, pTime);
+			TickInput(pGame, pTime, pGame.mPlayer);
 		}
 
 		void OnFixedTick(GameState& pGame, const GameTime& pTime)
@@ -91,18 +87,16 @@ namespace Game
 			renderBuffers();
 		}
 
-		RunState OnExit(GameState& pGame, const GameTime& pTime)
+		RunID OnExit(GameState& pGame, const GameTime& pTime)
 		{ 
 			deleteCustomConsole();
-			return pGame.pRunState;
+			return pGame.pRunId;
 		}
 	}
 
 	namespace Draw
 	{
-		void DrawTile(Tile* pTile, const unsigned int pPosition) { if (pTile) drawTile(pPosition, pTile->mSymbol, pTile->mColor); }
-		void DrawTile(Tile* pTile, const unsigned int pX, const unsigned int pY) { if (pTile)drawTile(pX, pY, pTile->mSymbol, pTile->mColor); }
-		
+		void DrawTile(Tile* pTile, const unsigned int pX, const unsigned int pY) { if (pTile) drawCharCoord(pTile->mSymbol, pX, pY, pTile->mColor); }
 		void DrawTileMap(TileMap& pTileMap)
 		{
 			for (size_t x = 0; x < pTileMap.mWidth; x++)
@@ -125,7 +119,7 @@ namespace Game
 
 		void GenTileMap(GameState& pGame)
 		{
-			TileMap map = TileMap(60, 30);
+			TileMap map = TileMap(20, 10);
 			Tile* wall = &pGame.mTileTypes[TileID::Wall];
 
 			for (size_t i = 0; i < map.mWidth; i++)
@@ -141,35 +135,72 @@ namespace Game
 			}
 
 			pGame.mTileMap = map;
+			SpawnTileRandom(pGame.mTileMap, &pGame.mTileTypes[TileID::Fruit]);
 		}
 
-		Tile& GetTileType(GameState& pGame, const unsigned short pId) { return pGame.mTileTypes[pId]; }
-		Tile* GetTile(GameState& pGame, const Vector2F pCoords) { return pGame.mTileMap(pCoords); }
-		void SetTile(GameState& pGame, const Vector2F pCoords, Tile* pTile) { pGame.mTileMap(pCoords) = pTile; }
+		void SpawnTileRandom(TileMap& pTileMap, Tile* pTile)
+		{
+			TileIndex targetIndex;
+
+			do
+			{
+				std::mt19937 rng(std::random_device{}());
+				std::uniform_int_distribution<int> dist(0, pTileMap.mSize);
+				targetIndex = (TileIndex)dist(rng);
+			} while (pTileMap[pTileMap(targetIndex)]);
+
+			pTileMap[pTileMap(targetIndex)] = pTile;
+		}
 	}
 
 	namespace Player
 	{
 		using namespace Game::Mechanics;
+		using namespace Game;
 
-		void InitPlayer(PlayerSnake& pPlayer)
+		void InitPlayer(GameState& pGame, PlayerSnake& pPlayer)
 		{
-			pPlayer.mPositions.push_back({ 5, 5 });
-			pPlayer.mPositions.push_back({ 5, 6 });
-			pPlayer.mPositions.push_back({ 5, 7 });
+			pPlayer.mPositions.push_front({ 5,5 });
+			AddToPlayer(pGame, pPlayer, 1);
+		}
+
+		void AddToPlayer(GameState& pGame, PlayerSnake& pPlayer, unsigned short amount)
+		{
+			while (amount-- > 0)
+				pPlayer.mPositions.push_back(pPlayer.mPositions.back());
 		}
 
 		void TickPlayer(GameState& pGame, const GameTime& pTime, PlayerSnake& pPlayer)
 		{
+			if (pPlayer.mPositions.empty()) return;
 
+			Tile* collidedTile = pGame.mTileMap[pGame.mTileMap(pPlayer.mPositions.front() + pPlayer.mDirection)];
+
+			if (collidedTile)
+			{
+				if (collidedTile->mId == TileID::Fruit)
+				{
+					AddToPlayer(pGame, pPlayer);
+					SpawnTileRandom(pGame.mTileMap, &pGame.mTileTypes[TileID::Fruit]);
+				}
+				else
+				{
+					pPlayer.isDead = true;
+					pGame.pRunId = RunID::Restart;
+					return;
+				}
+			}
+
+			Vector2Int oldTail = pPlayer.mPositions.back();
+			pGame.mTileMap[oldTail] = nullptr;
+			pPlayer.mPositions.pop_back();
+
+			Vector2Int newHead = pGame.mTileMap(pPlayer.mPositions.front() + pPlayer.mDirection);
+			pPlayer.mPositions.push_front(newHead);
+			pGame.mTileMap[newHead] = &pGame.mTileTypes[TileID::Snake];
 		}
 
-		void AddToPlayer(PlayerSnake& pPlayer, unsigned short amount)
-		{
-
-		}
-
-		void TickInput(GameState& pGame, const GameTime& pTime)
+		void TickInput(GameState& pGame, const GameTime& pTime, PlayerSnake& pPlayer)
 		{
 			int inputX =
 				Math::Clamp(getIfRightKeyIsCurrentlyDown())
@@ -178,20 +209,22 @@ namespace Game
 				Math::Clamp(getIfDownKeyIsCurrentlyDown())
 				- Math::Clamp(getIfUpKeyIsCurrentlyDown());
 
-			if (inputX != 0)
+			if (inputX != 0 && pPlayer.mDirection.x == 0)
 			{
-				pGame.mInput.y = 0;
-				pGame.mInput.x = inputX;
+				pPlayer.mDirection.y = 0;
+				pPlayer.mDirection.x = inputX;
 			}
 
-			if (inputY != 0)
+			if (inputY != 0 && pPlayer.mDirection.y == 0)
 			{
-				pGame.mInput.x = 0;
-				pGame.mInput.y = inputY;
+				pPlayer.mDirection.x = 0;
+				pPlayer.mDirection.y = inputY;
 			}
+		}
 
-			if (getIfSpaceKeyIsCurrentlyDown())
-				AddToPlayer(pGame.mPlayer);
+		void OnCollided(GameState& pGame, PlayerSnake& pPlayer, Tile* pTile)
+		{
+
 		}
 	}
 }
