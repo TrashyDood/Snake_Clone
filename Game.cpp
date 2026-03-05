@@ -18,7 +18,7 @@ namespace Game
 
 		GameState game{};
 		GameTime time{};
-		GameTime fixedTime{ duration<float>(1.0f / 8) };
+		GameTime fixedTime{ duration<float>(1.0f / 6) };
 
 		OnInit(game);
 
