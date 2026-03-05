@@ -1,7 +1,5 @@
 #pragma once
 
-#include "console_renderer.h"
-#include "Game.h"
 #include "Utils.h"
 #include <chrono>
 #include <array>
@@ -12,11 +10,11 @@
 using namespace std::chrono;
 
 typedef unsigned int TileIndex;
-typedef unsigned short IDState;
+typedef unsigned short ID;
 
 namespace Game
 {
-	// Too lazy to make new files.
+	// Too lazy to make new files...
 #pragma region Forward Declarations
 	struct GameInstance;
 	struct PlayerSnake;
@@ -30,14 +28,22 @@ namespace Game
 	}
 #pragma endregion
 
-	enum RunID : IDState
+	enum PlayerID : ID
+	{
+		Player1 = 0,
+		Player2 = 1,
+		Player3 = 2,
+		Player4 = 3
+	};
+
+	enum RunID : ID
 	{
 		Exit = 0,
 		Running = 1,
 		Restart = 2
 	};
 
-	enum TileID : IDState
+	enum TileID : ID
 	{
 		Wall = 0,
 		Fruit = 1,
@@ -46,7 +52,7 @@ namespace Game
 
 	struct Vector2Int
 	{
-		int x, y;
+		int x = 0, y = 0;
 		Vector2Int operator+(const Vector2Int& other) const { return { x + other.x, y + other.y }; }
 	};
 
@@ -62,7 +68,7 @@ namespace Game
 		char mSymbol;
 		unsigned long mColor;
 		CollisionEvent mColEvent = CollisionEvents::DeathCol;
-		IDState mId = 0;
+		ID mId = 0;
 
 		const bool operator==(const Tile& pOther) const
 		{
@@ -117,21 +123,36 @@ namespace Game
 			mWidth(pWidth), mHeight(pHeight), mSize(pWidth * pHeight), mTiles(pWidth * pHeight, nullptr) { }
 	};
 
+	struct PlayerInput
+	{
+		KeyID mRight, mUp,
+			mLeft, mDown,
+			mActivate;
+	};
+
 	struct PlayerSnake
 	{
-		bool isDead = false;
-		Vector2Int mDirection{ 0, 1 };
+		PlayerInput* mInput;
+		Vector2Int mDirection;
+		bool mIsAlive = false;
 		std::deque<Vector2Int> mPositions{};
 	};
 
 	struct GameInstance
 	{
-		PlayerSnake mPlayer;
 		RunID pRunId = RunID::Running;
-		float fruitSpawnTimer = 0;
-
+		PlayerSnake mPlayer;
 		TileMap mTileMap;
-		std::array<Tile, 3> mTiles =
+
+		std::array<PlayerInput, 4> mInputs
+		{
+			PlayerInput{ 'D', 'W', 'A', 'S'},
+			PlayerInput{ 'L', 'I', 'J', 'K'},
+			PlayerInput{ VK_RIGHT, VK_UP, VK_LEFT, VK_DOWN },
+			PlayerInput{ VK_NUMPAD6, VK_NUMPAD8, VK_NUMPAD4, VK_NUMPAD5 },
+		};
+
+		std::array<Tile, 3> mTiles
 		{
 			Tile{ '#', FOREGROUND_GREEN | FOREGROUND_BLUE },
 			Tile{ '*', FOREGROUND_GREEN, CollisionEvents::FruitCol },
@@ -160,13 +181,16 @@ namespace Game
 	namespace Mechanics
 	{
 		void InitTiles(GameInstance& pGame);
-		void GenTileMap(GameInstance& pGame);
+		void InitTileMap(GameInstance& pGame);
 		void SpawnTileRandom(TileMap& pTileMap, Tile* pTile);
+
+		void OnLose(GameInstance& pGame);
+		void OnWin(GameInstance& pGame, PlayerSnake& pPlayer);
 	}
 
 	namespace Player
 	{
-		void InitPlayer(GameInstance& pGame, PlayerSnake& pPlayer);
+		void InitNewPlayer(GameInstance& pGame);
 		void AddToPlayer(GameInstance& pGame, PlayerSnake& pPlayer, unsigned short amount = 1);
 		void TickPlayer(GameInstance& pGame, const GameTime& pTime, PlayerSnake& pPlayer);
 		void TickInput(GameInstance& pGame, const GameTime& pTime, PlayerSnake& pPlayer);

@@ -8,6 +8,7 @@
 #define WRITE(x) std::cout << x;
 
 using namespace std::chrono;
+using namespace Rendering;
 
 namespace Game
 {
@@ -70,14 +71,26 @@ namespace Game
 
 		void OnInit(GameInstance& pGame)
 		{
-			setupCustomConsole();
 			InitTiles(pGame);
-			InitPlayer(pGame, pGame.mPlayer);
-			GenTileMap(pGame);
+			InitTileMap(pGame);
+
+			InitNewPlayer(pGame);
 		}
 
 		void OnTick(GameInstance& pGame, const GameTime& pTime)
 		{
+			if (Input::GetKey(VK_ESCAPE))
+			{
+				pGame.pRunId = RunID::Exit;
+				return;
+			}
+
+			if (Input::GetKey(VK_F1))
+			{
+				pGame.pRunId = RunID::Restart;
+				return;
+			}
+
 			TickInput(pGame, pTime, pGame.mPlayer);
 		}
 
@@ -88,25 +101,24 @@ namespace Game
 
 		void OnDraw(GameInstance& pGame, const GameTime& pTime)
 		{
-			clearBuffer();
+			renderBuffer.ClearBuffers();
 
-			Rendering::DrawOutline('+', pGame.mTileMap.mWidth + 2, pGame.mTileMap.mHeight + 2, 0, 0);
+			renderBuffer.DrawOutline('+', pGame.mTileMap.mWidth + 2, pGame.mTileMap.mHeight + 2, 0, 0);
 			DrawTileMap(pGame.mTileMap, 1, 1);
 
-			renderBuffers();
+			renderBuffer.RenderBuffers();
 		}
 
 		RunID OnExit(GameInstance& pGame, const GameTime& pTime)
 		{ 
-			deleteCustomConsole();
 			return pGame.pRunId;
 		}
 	}
 
 	namespace Draw
 	{
-		void DrawTile(Tile* pTile, const UINT32 pX, const UINT32 pY) { if (pTile) DrawCharCoords(pTile->mSymbol, pX, pY, pTile->mColor); }
-		void DrawTile(Tile& pTile, const UINT32 pX, const UINT32 pY) { DrawCharCoords(pTile.mSymbol, pX, pY, pTile.mColor); }
+		void DrawTile(Tile* pTile, const UINT32 pX, const UINT32 pY) { if (pTile) renderBuffer.DrawCharCoords(pTile->mSymbol, pX, pY, pTile->mColor); }
+		void DrawTile(Tile& pTile, const UINT32 pX, const UINT32 pY) { renderBuffer.DrawCharCoords(pTile.mSymbol, pX, pY, pTile.mColor); }
 
 		void DrawTileMap(TileMap& pTileMap, const UINT32 pOffsetX, const UINT32 pOffsetY)
 		{
@@ -118,6 +130,8 @@ namespace Game
 
 	namespace Mechanics
 	{
+		using namespace Player;
+
 		void InitTiles(GameInstance& pGame)
 		{
 			// initialize tile types.
@@ -128,22 +142,22 @@ namespace Game
 			}
 		}
 
-		void GenTileMap(GameInstance& pGame)
+		void InitTileMap(GameInstance& pGame)
 		{
-			TileMap map = TileMap(15, 10);
+			TileMap map = TileMap(30, 20);
 			Tile* wall = &pGame.mTiles[TileID::Wall];
 
-			//for (size_t i = 0; i < map.mWidth; i++)
-			//{
-			//	map[map(i, 0)] = wall;
-			//	map[map(i, map.mHeight - 1)] = wall;
-			//}
+			for (size_t i = 0; i < map.mWidth; i++)
+			{
+				map[map(i, 0)] = wall;
+				map[map(i, map.mHeight - 1)] = wall;
+			}
 
-			//for (size_t i = 0; i < map.mHeight; i++)
-			//{
-			//	map[map(0, i)] = wall;
-			//	map[map(map.mWidth - 1, i)] = wall;
-			//}
+			for (size_t i = 0; i < map.mHeight; i++)
+			{
+				map[map(0, i)] = wall;
+				map[map(map.mWidth - 1, i)] = wall;
+			}
 
 			pGame.mTileMap = map;
 			SpawnTileRandom(pGame.mTileMap, &pGame.mTiles[TileID::Fruit]);
@@ -162,6 +176,16 @@ namespace Game
 
 			pTileMap[pTileMap(targetIndex)] = pTile;
 		}
+
+		void OnLose(GameInstance& pGame)
+		{
+
+		}
+
+		void OnWin(GameInstance& pGame, PlayerSnake& pPlayer)
+		{
+
+		}
 	}
 
 	namespace Player
@@ -169,10 +193,25 @@ namespace Game
 		using namespace Game::Mechanics;
 		using namespace Game;
 
-		void InitPlayer(GameInstance& pGame, PlayerSnake& pPlayer)
+		void InitNewPlayer(GameInstance& pGame)
 		{
-			pPlayer.mPositions.push_front({ 5,5 });
-			AddToPlayer(pGame, pPlayer, 1);
+			PlayerSnake newPlayer
+			{
+				&pGame.mInputs[0],
+				{ 1,0 },
+				true,
+				{{ 5,5 }}
+			};
+
+			AddToPlayer(pGame, newPlayer);
+
+			pGame.mPlayer = newPlayer;
+
+			//pGame.mPlayer.mInput = &pGame.mInputs[0];
+			//pGame.mPlayer.mDirection = { 1,0 };
+			//pGame.mPlayer.mIsAlive = true;
+			//pGame.mPlayer.mPositions.push_front({ 5,5 });
+			//AddToPlayer(pGame, pGame.mPlayer);
 		}
 
 		void AddToPlayer(GameInstance& pGame, PlayerSnake& pPlayer, unsigned short amount)
@@ -184,6 +223,13 @@ namespace Game
 		void TickPlayer(GameInstance& pGame, const GameTime& pTime, PlayerSnake& pPlayer)
 		{
 			if (pPlayer.mPositions.empty()) return;
+
+			if (!pPlayer.mIsAlive)
+			{
+				pGame.mTileMap[pPlayer.mPositions.front()] = nullptr;
+				pPlayer.mPositions.pop_front();
+				return;
+			}
 
 			Tile* collidedTile = pGame.mTileMap[pGame.mTileMap(
 				pPlayer.mPositions.front() + pPlayer.mDirection)];
@@ -202,12 +248,14 @@ namespace Game
 
 		void TickInput(GameInstance& pGame, const GameTime& pTime, PlayerSnake& pPlayer)
 		{
+			const PlayerInput input = *pPlayer.mInput;
+
 			int inputX =
-				Math::Clamp(getIfRightKeyIsCurrentlyDown())
-				- Math::Clamp(getIfLeftKeyIsCurrentlyDown());
+				Math::Clamp(Input::GetKey(input.mRight))
+				- Math::Clamp(Input::GetKey(input.mLeft));
 			int inputY =
-				Math::Clamp(getIfDownKeyIsCurrentlyDown())
-				- Math::Clamp(getIfUpKeyIsCurrentlyDown());
+				Math::Clamp(Input::GetKey(input.mDown))
+				- Math::Clamp(Input::GetKey(input.mUp));
 
 			if (inputX != 0 && pPlayer.mDirection.x == 0)
 			{
@@ -238,9 +286,7 @@ namespace Game
 
 		bool DeathCol(GameInstance& pGame, PlayerSnake& pPlayer, Tile* pTile)
 		{
-			pPlayer.isDead = true;
-			pGame.pRunId = RunID::Restart;
-
+			pPlayer.mIsAlive = false;
 			return true;
 		}
 	}
