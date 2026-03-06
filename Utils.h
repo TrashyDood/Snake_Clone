@@ -2,12 +2,12 @@
 
 #include <iostream>
 #include <windows.h>
+#include <string>
 
-typedef unsigned int UINT32;
 typedef unsigned short Color;
 typedef int KeyID;
 
-inline constexpr COORD defaultCoord = { 0, 0 };
+constexpr COORD defaultCoord = { 0, 0 };
 
 const Color white = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY;
 
@@ -44,7 +44,7 @@ namespace Rendering
 		Color* mColorBuffer = nullptr;
 
 	public:
-		inline void FillBuffer(char pChar, Color pColor = white)
+		inline void FillBuffer(const char pChar, const Color pColor = white)
 		{
 			for (size_t i = 0; i < mMaxSize; i++)
 			{
@@ -55,7 +55,7 @@ namespace Rendering
 
 		inline void ClearBuffers() { FillBuffer(' '); }
 
-		RendBuffer(UINT32 pMaxSize = 512) :
+		RendBuffer(const UINT32 pMaxSize = 512) :
 			mMaxSize(pMaxSize), mCharBuffer(new char[pMaxSize]()), mColorBuffer(new Color[pMaxSize]())
 		{ 
 			mActiveHandle = 1;
@@ -76,7 +76,7 @@ namespace Rendering
 			ClearBuffers();
 		}
 
-		inline void DrawChar(char pChar, unsigned int pIndex, unsigned short pColor = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE)
+		inline void DrawChar(const char pChar, const UINT32 pIndex, const Color pColor = white)
 		{
 			if (pIndex > mMaxSize - 1)
 				return;
@@ -85,26 +85,32 @@ namespace Rendering
 			mColorBuffer[pIndex] = pColor;
 		}
 
-		inline void DrawCharCoords(char pChar, unsigned int pX, unsigned int pY, unsigned short pColor = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE)
+		inline void DrawCharCoords(const char pChar, const UINT32 pX, const UINT32 pY, const Color pColor = white)
 		{
 			DrawChar(pChar, pX + pY * mWidth, pColor);
 		}
 
-		inline void DrawOutline(const char pChar, const UINT32 pWidth, const UINT32 pHeight, const UINT32 pX, const UINT32 pY)
+		inline void DrawString(const std::string pString, UINT32 pX, UINT32 pY, Color pColor = white)
+		{
+			for (size_t i = 0; i < pString.size(); i++)
+				DrawCharCoords(pString[i], pX + i, pY, pColor);
+		}
+
+		inline void DrawOutline(const char pChar, const UINT32 pWidth, const UINT32 pHeight, const UINT32 pX, const UINT32 pY, Color pColor = white)
 		{
 			for (size_t i = 0; i < pWidth; i++)
 			{
-				DrawCharCoords(pChar, i + pX, pY);
-				DrawCharCoords(pChar, i + pX, pY + pHeight - 1);
+				DrawCharCoords(pChar, i + pX, pY, pColor);
+				DrawCharCoords(pChar, i + pX, pY + pHeight - 1, pColor);
 			}
 			for (size_t i = 1; i < pHeight - 1; i++)
 			{
-				DrawCharCoords(pChar, pX, i + pY);
-				DrawCharCoords(pChar, pX + pWidth - 1, i + pY);
+				DrawCharCoords(pChar, pX, i + pY, pColor);
+				DrawCharCoords(pChar, pX + pWidth - 1, i + pY, pColor);
 			}
 		}
 
-		inline void RenderBuffers(COORD pCoord = { 0, 0 })
+		inline void RenderBuffers(const COORD pCoord = { 0, 0 })
 		{
 
 			GetWindowSize(mWidth, mHeight);

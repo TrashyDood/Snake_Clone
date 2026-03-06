@@ -124,8 +124,6 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="Achievements.h" />
-    <ClInclude Include="console_renderer.h" />
     <ClInclude Include="Game.h" />
     <ClInclude Include="Snake_Clone.h" />
     <ClInclude Include="Utils.h" />
