@@ -142,16 +142,18 @@ namespace Game
 		Player* mPlayer = nullptr;
 		Vector2Int mDirection{};
 		bool mIsAlive = true;
+		int mPoints = -1;
 		std::deque<Vector2Int> mPositions{};
 	};
 
 	struct GameInstance
 	{
-		unsigned int mSeed;
+		UINT32 mSeed;
 		TileMap mTileMap;
 		RunID mRunId = RunID::Running;
 		GameState mState = GameState::Starting;
-		unsigned int mLivingSnakes, mGameOverCounter;
+		UINT32 mLivingSnakes;
+		bool mPvpEnabled = false;
 
 		std::vector<PlayerSnake> mActiveSnakes{};
 
@@ -199,8 +201,8 @@ namespace Game
 	{
 		void InitTileMap(GameInstance& pGame);
 		TileIndex GetRandomTilePos(GameInstance& pGame);
-		void SpawnTileRandom(GameInstance& pGame, Tile* pTile);
-		void SpawnFruit(GameInstance& pGame);
+		void PlaceTileRandom(GameInstance& pGame, Tile* pTile);
+		void SpawnFruit(GameInstance& pGame, unsigned short pCount = 1);
 
 		void PlaceTile(TileMap& pTileMap, Tile* pTile, TileIndex pIndex);
 		void PlaceTile(TileMap& pTileMap, Tile* pTile, Vector2Int pPosition);
@@ -216,7 +218,7 @@ namespace Game
 	namespace PlayerMechanics
 	{
 		void InitNewSnake(GameInstance& pGame, ID pPlayerId);
-		void AddToSnake(GameInstance& pGame, PlayerSnake& pSnake, unsigned short amount = 1);
+		void AddToSnake(GameInstance& pGame, PlayerSnake& pSnake, unsigned short pCount = 1);
 		void TickPlayer(GameInstance& pGame, const GameTime& pTime, PlayerSnake& pSnake);
 		void TickInput(GameInstance& pGame, const GameTime& pTime, PlayerSnake& pSnake);
 		void KillSnake(GameInstance& pGame, PlayerSnake& pSnake);

@@ -76,17 +76,8 @@ namespace Game
 
 		void OnTick(GameInstance& pGame, const GameTime& pTime)
 		{
-			if (Input::GetKey(VK_ESCAPE))
-			{
-				pGame.mRunId = RunID::Exit;
-				return;
-			}
-
-			if (Input::GetKey(VK_F1))
-			{
-				pGame.mRunId = RunID::Restart;
-				return;
-			}
+			if (Input::GetKey(VK_ESCAPE)) pGame.mRunId = RunID::Exit;
+			if (Input::GetKey(VK_F1)) pGame.mRunId = RunID::Restart;
 
 			if (pGame.mState == GameState::Starting)
 			{
@@ -102,7 +93,6 @@ namespace Game
 
 				if (Input::GetKey(VK_SPACE) && !pGame.mActiveSnakes.empty())
 					pGame.mState = GameState::Playing;
-				return;
 			}
 
 			for (auto& snake : pGame.mActiveSnakes)
@@ -111,20 +101,13 @@ namespace Game
 
 		void OnFixedTick(GameInstance& pGame, const GameTime& pTime)
 		{
-			if (pGame.mState == GameState::GameOver)
+			for (auto& snake : pGame.mActiveSnakes)
 			{
-				for (auto& snake : pGame.mActiveSnakes)
+				if (pGame.mState == GameState::Playing && snake.mIsAlive)
 					TickPlayer(pGame, pTime, snake);
-				if (pGame.mGameOverCounter > 0)
-					pGame.mGameOverCounter--;
-				else
-					pGame.mRunId = RunID::Restart;
-				return;
+				else if (pGame.mState == GameState::GameOver && !snake.mIsAlive)
+					TickPlayer(pGame, pTime, snake);
 			}
-
-			if (pGame.mState == GameState::Playing)
-				for (auto& snake : pGame.mActiveSnakes)
-					TickPlayer(pGame, pTime, snake);
 		}
 
 		void OnDraw(GameInstance& pGame, const GameTime& pTime)
@@ -136,10 +119,16 @@ namespace Game
 			DrawSideInfo(pGame, pTime);
 
 			if (pGame.mState == GameState::Starting)
-				DrawCenteredString(pGame.mTileMap, "Waiting for players...");
+			{
+				DrawCenteredString(pGame.mTileMap, "Waiting for players...", 2);
+				DrawCenteredString(pGame.mTileMap, "- Press 'Space' to start -", 1, 1);
+			}
 
 			if (pGame.mState == GameState::GameOver)
-				DrawCenteredString(pGame.mTileMap, "Game Over");
+			{
+				DrawCenteredString(pGame.mTileMap, "Game Over", 2);
+				DrawCenteredString(pGame.mTileMap, "- Press 'F1' to restart -", 1, 1);
+			}
 
 			renderBuffer.RenderBuffers();
 		}
@@ -174,14 +163,16 @@ namespace Game
 			int offsetX = pGame.mTileMap.mWidth + 3;
 			int offsetY = 1;
 
+			renderBuffer.DrawString(std::string("PvP: ") + (pGame.mPvpEnabled ? "Enabled" : "Disabled"), offsetX, 0);
+
 			for (size_t i = 0; i < pGame.mActiveSnakes.size(); i++)
 			{
 				PlayerSnake& snake = pGame.mActiveSnakes[i];
 				int y = offsetY + i * 3;
 
 				renderBuffer.DrawString("P" + std::to_string(i + 1), offsetX, y, snake.mPlayer->mTile.mColor);
-				renderBuffer.DrawString(snake.mIsAlive ? "Alive" : "Dead", offsetX + 3, y, snake.mPlayer->mTile.mColor);
-				renderBuffer.DrawString("Score: " + std::to_string(snake.mPositions.size() - 2), offsetX, y + 1, snake.mPlayer->mTile.mColor);
+				renderBuffer.DrawString(snake.mIsAlive ? "Alive" : "Dead", offsetX + 4, y, snake.mPlayer->mTile.mColor);
+				renderBuffer.DrawString("Score: " + std::to_string(snake.mPoints), offsetX, y + 1, snake.mPlayer->mTile.mColor);
 			}
 		}
 	}
@@ -192,7 +183,7 @@ namespace Game
 
 		void InitTileMap(GameInstance& pGame)
 		{
-			TileMap map = TileMap(60, 25);
+			TileMap map = TileMap(45, 25);
 			Tile* wall = &pGame.mWallTile;
 			std::mt19937 rng(pGame.mSeed);
 
@@ -236,12 +227,12 @@ namespace Game
 			{
 				int x = std::uniform_int_distribution<int>(midX - 10, midX + 10)(rng);
 				int y = std::uniform_int_distribution<int>(midY - 5, midY + 5)(rng);
-				int len = std::uniform_int_distribution<int>(4, 10)(rng);
+				int length = std::uniform_int_distribution<int>(4, 10)(rng);
 				bool horizontal = std::uniform_int_distribution<int>(0, 1)(rng);
-				int gapPos = std::uniform_int_distribution<int>(0, len - 1)(rng);
+				int gapPos = std::uniform_int_distribution<int>(0, length - 1)(rng);
 				int gapSize2 = std::uniform_int_distribution<int>(1, 2)(rng);
 
-				for (int i = 0; i < len; i++)
+				for (int i = 0; i < length; i++)
 				{
 					if (abs(i - gapPos) <= gapSize2) continue;
 					PlaceTile(map, wall, horizontal ? Vector2Int{ x + i, y } : Vector2Int{ x, y + i });
@@ -249,7 +240,7 @@ namespace Game
 			}
 
 			pGame.mTileMap = map;
-			SpawnFruit(pGame);
+			SpawnFruit(pGame, 2);
 		}
 
 		TileIndex GetRandomTilePos(GameInstance& pGame)
@@ -266,16 +257,19 @@ namespace Game
 			return targetIndex;
 		}
 
-		void SpawnTileRandom(GameInstance& pGame, Tile* pTile) { PlaceTile(pGame.mTileMap, pTile, GetRandomTilePos(pGame)); }
+		void PlaceTileRandom(GameInstance& pGame, Tile* pTile) { PlaceTile(pGame.mTileMap, pTile, GetRandomTilePos(pGame)); }
 
-		void SpawnFruit(GameInstance& pGame)
+		void SpawnFruit(GameInstance& pGame, unsigned short pCount)
 		{
 			std::mt19937 rng(pGame.mSeed++);
-			int dist = std::uniform_int_distribution<int>(0, 7)(rng);
-			Tile* fruit = dist == 0 ? &pGame.mMegaFruitTile
-				: dist == 1 ? &pGame.mSuperFruitTile
-				: &pGame.mFruitTile;
-			SpawnTileRandom(pGame, fruit);
+			while (pCount--)
+			{
+				int dist = std::uniform_int_distribution<int>(0, 7)(rng);
+				Tile* fruit = dist == 0 ? &pGame.mMegaFruitTile
+					: dist == 1 ? &pGame.mSuperFruitTile
+					: &pGame.mFruitTile;
+				PlaceTileRandom(pGame, fruit);
+			}
 		}
 
 		void PlaceTile(TileMap& pTileMap, Tile* pTile, TileIndex pIndex)
@@ -338,18 +332,17 @@ namespace Game
 			pGame.mActiveSnakes.push_back(snake);
 
 			pGame.mLivingSnakes++;
-			PlaceTile(pGame.mTileMap, &pGame.mPlayers[pPlayerId].mTile, snake.mPositions.front());
+			if (pGame.mActiveSnakes.size() > 1) pGame.mPvpEnabled = true;
 
-			//pGame.mPlayer.mInput = &pGame.mInputs[0];
-			//pGame.mPlayer.mDirection = { 1,0 };
-			//pGame.mPlayer.mIsAlive = true;
-			//pGame.mPlayer.mPositions.push_front({ 5,5 });
-			//AddToPlayer(pGame, pGame.mPlayer);
+			PlaceTile(pGame.mTileMap, &pGame.mPlayers[pPlayerId].mTile, snake.mPositions.front());
+			SpawnFruit(pGame);
 		}
 
-		void AddToSnake(GameInstance& pGame, PlayerSnake& pSnake, unsigned short amount)
+		void AddToSnake(GameInstance& pGame, PlayerSnake& pSnake, unsigned short pCount)
 		{
-			while (amount-- > 0)
+			pSnake.mPoints += pCount;
+
+			while (pCount-- > 0)
 				pSnake.mPositions.push_back(pSnake.mPositions.back());
 		}
 
@@ -410,12 +403,9 @@ namespace Game
 			pGame.mLivingSnakes--;
 			pSnake.mIsAlive = false;
 
-			if ((pGame.mActiveSnakes.size() > 1 && pGame.mLivingSnakes == 1) ||
-				(pGame.mActiveSnakes.size() == 1 && pGame.mLivingSnakes < 1))
-			{
-				pGame.mState = GameState::GameOver;
-				pGame.mGameOverCounter = 10;
-			}
+			if ((pGame.mPvpEnabled && pGame.mLivingSnakes < 2) ||
+				(!pGame.mPvpEnabled && pGame.mLivingSnakes < 1))
+					pGame.mState = GameState::GameOver;
 		}
 	}
 
@@ -442,7 +432,7 @@ namespace Game
 
 		bool MegaFruitCol(GameInstance& pGame, PlayerSnake& pSnake, Tile* pTile)
 		{
-			AddToSnake(pGame, pSnake, 3);
+			AddToSnake(pGame, pSnake, 1);
 			SpawnFruit(pGame);
 
 			return false;

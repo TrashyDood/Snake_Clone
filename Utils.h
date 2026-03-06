@@ -32,7 +32,7 @@ namespace Rendering
 		pHeight = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
 	}
 
-	class RendBuffer // Doesn't handle memcopies. Im lazy...
+	class RendBuffer // Doesn't handle memcopies... Im lazy...
 	{
 	public:
 		const UINT32 mMaxSize;
