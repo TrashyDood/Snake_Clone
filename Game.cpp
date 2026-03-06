@@ -111,18 +111,6 @@ namespace Game
 
 		void OnFixedTick(GameInstance& pGame, const GameTime& pTime)
 		{
-			if (pGame.mActiveSnakes.size() > 1 && pGame.mLivingSnakes == 1)
-			{
-				pGame.mState = GameState::GameOver;
-				return;
-			}
-
-			if (pGame.mActiveSnakes.size() == 1 && (pGame.mTileMap.mCount == pGame.mTileMap.mSize || pGame.mLivingSnakes < 1))
-			{
-				pGame.mState = GameState::GameOver;
-				return;
-			}
-
 			if (pGame.mState == GameState::Playing)
 				for(auto& snake : pGame.mActiveSnakes)
 					TickPlayer(pGame, pTime, snake);
@@ -212,6 +200,7 @@ namespace Game
 				if (abs(i - gapV) > gapSize) PlaceTile(map, wall, { (int)map.mWidth - 1, i });
 			}
 
+			// Edge walls
 			int wallCount = std::uniform_int_distribution<int>(8, 14)(rng);
 			for (int w = 0; w < wallCount; w++)
 			{
@@ -221,6 +210,25 @@ namespace Game
 				bool horizontal = std::uniform_int_distribution<int>(0, 1)(rng);
 				int gapPos = std::uniform_int_distribution<int>(0, len - 1)(rng);
 				int gapSize2 = std::uniform_int_distribution<int>(1, 3)(rng);
+
+				for (int i = 0; i < len; i++)
+				{
+					if (abs(i - gapPos) <= gapSize2) continue;
+					PlaceTile(map, wall, horizontal ? Vector2Int{ x + i, y } : Vector2Int{ x, y + i });
+				}
+			}
+
+			// Middle walls
+			int midX = map.mWidth / 2, midY = map.mHeight / 2;
+			int midWallCount = std::uniform_int_distribution<int>(4, 7)(rng);
+			for (int w = 0; w < midWallCount; w++)
+			{
+				int x = std::uniform_int_distribution<int>(midX - 10, midX + 10)(rng);
+				int y = std::uniform_int_distribution<int>(midY - 5, midY + 5)(rng);
+				int len = std::uniform_int_distribution<int>(4, 10)(rng);
+				bool horizontal = std::uniform_int_distribution<int>(0, 1)(rng);
+				int gapPos = std::uniform_int_distribution<int>(0, len - 1)(rng);
+				int gapSize2 = std::uniform_int_distribution<int>(1, 2)(rng);
 
 				for (int i = 0; i < len; i++)
 				{
@@ -390,6 +398,12 @@ namespace Game
 
 			pGame.mLivingSnakes--;
 			pSnake.mIsAlive = false;
+
+			if ((pGame.mActiveSnakes.size() > 1 && pGame.mLivingSnakes == 1) ||
+				(pGame.mActiveSnakes.size() == 1 && pGame.mLivingSnakes < 1))
+			{
+				pGame.mState = GameState::GameOver;
+			}
 		}
 	}
 
