@@ -151,7 +151,7 @@ namespace Game
 		TileMap mTileMap;
 		RunID mRunId = RunID::Running;
 		GameState mState = GameState::Starting;
-		unsigned int mLivingSnakes;
+		unsigned int mLivingSnakes, mGameOverCounter;
 
 		std::vector<PlayerSnake> mActiveSnakes{};
 

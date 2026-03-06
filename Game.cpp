@@ -111,8 +111,19 @@ namespace Game
 
 		void OnFixedTick(GameInstance& pGame, const GameTime& pTime)
 		{
+			if (pGame.mState == GameState::GameOver)
+			{
+				for (auto& snake : pGame.mActiveSnakes)
+					TickPlayer(pGame, pTime, snake);
+				if (pGame.mGameOverCounter > 0)
+					pGame.mGameOverCounter--;
+				else
+					pGame.mRunId = RunID::Restart;
+				return;
+			}
+
 			if (pGame.mState == GameState::Playing)
-				for(auto& snake : pGame.mActiveSnakes)
+				for (auto& snake : pGame.mActiveSnakes)
 					TickPlayer(pGame, pTime, snake);
 		}
 
@@ -403,6 +414,7 @@ namespace Game
 				(pGame.mActiveSnakes.size() == 1 && pGame.mLivingSnakes < 1))
 			{
 				pGame.mState = GameState::GameOver;
+				pGame.mGameOverCounter = 10;
 			}
 		}
 	}
