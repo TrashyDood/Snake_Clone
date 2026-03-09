@@ -33,17 +33,17 @@ namespace Game
 
 	enum RunID : ID
 	{
-		Exit = 0,
-		Running = 1,
-		Restart = 2
+		EXIT = 0,
+		RUNNING = 1,
+		RESTART = 2
 	};
 
 	enum GameState : ID
 	{
-		Playing = 0,
-		Starting = 1,
-		Paused = 2,
-		GameOver = 3
+		PLAYING = 0,
+		STARTING = 1,
+		PAUSED = 2,
+		GAMEOVER = 3
 	};
 
 	struct Vector2Int
@@ -142,22 +142,23 @@ namespace Game
 		Player* mPlayer = nullptr;
 		Vector2Int mDirection{};
 		bool mIsAlive = true;
-		int mPoints = -1;
+		int mPoints = -1,
+			mSpeed = 2;
 		std::deque<Vector2Int> mPositions{};
 	};
 
 	struct GameInstance
 	{
-		UINT32 mSeed;
+		int mSeed;
 		TileMap mTileMap;
-		RunID mRunId = RunID::Running;
-		GameState mState = GameState::Starting;
+		RunID mRunId = RunID::RUNNING;
+		GameState mState = GameState::STARTING;
 		UINT32 mLivingSnakes;
 		bool mPvpEnabled = false;
 
 		std::vector<PlayerSnake> mActiveSnakes{};
 
-		Tile mWallTile = { '#', FOREGROUND_GREEN | FOREGROUND_BLUE },
+		Tile mWallTile = { '@', FOREGROUND_GREEN | FOREGROUND_BLUE },
 			mFruitTile = { '*', FOREGROUND_GREEN, CollisionEvents::FruitCol },
 			mSuperFruitTile = { '*', FOREGROUND_RED | FOREGROUND_GREEN, CollisionEvents::SuperFruitCol },
 			mMegaFruitTile = { '*', FOREGROUND_RED | FOREGROUND_BLUE, CollisionEvents::MegaFruitCol };
@@ -219,6 +220,7 @@ namespace Game
 	{
 		void InitNewSnake(GameInstance& pGame, ID pPlayerId);
 		void AddToSnake(GameInstance& pGame, PlayerSnake& pSnake, unsigned short pCount = 1);
+		void TickCollision(GameInstance& pGame, const GameTime pTime, PlayerSnake& pSnake);
 		void TickPlayer(GameInstance& pGame, const GameTime& pTime, PlayerSnake& pSnake);
 		void TickInput(GameInstance& pGame, const GameTime& pTime, PlayerSnake& pSnake);
 		void KillSnake(GameInstance& pGame, PlayerSnake& pSnake);

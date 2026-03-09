@@ -26,7 +26,7 @@ namespace Game
 		steady_clock::time_point previousTime = steady_clock::now();
 		duration<float> fixedAccumulator(0.0f), drawAccumulator(0.0f);
 
-		while (game.mRunId == RunID::Running) // Game loop.
+		while (game.mRunId == RunID::RUNNING) // Game loop.
 		{
 			time.mTime = steady_clock::now();
 			time.mTimeStep = time.mTime - previousTime;
@@ -65,9 +65,9 @@ namespace Game
 
 	namespace Core
 	{
-		using namespace Game::Draw;
-		using namespace Game::Mechanics;
-		using namespace Game::PlayerMechanics;
+		using namespace Draw;
+		using namespace Mechanics;
+		using namespace PlayerMechanics;
 
 		void OnInit(GameInstance& pGame)
 		{
@@ -76,10 +76,10 @@ namespace Game
 
 		void OnTick(GameInstance& pGame, const GameTime& pTime)
 		{
-			if (Input::GetKey(VK_ESCAPE)) pGame.mRunId = RunID::Exit;
-			if (Input::GetKey(VK_F1)) pGame.mRunId = RunID::Restart;
+			if (Input::GetKey(VK_ESCAPE)) pGame.mRunId = RunID::EXIT;
+			if (Input::GetKey(VK_F1)) pGame.mRunId = RunID::RESTART;
 
-			if (pGame.mState == GameState::Starting)
+			if (pGame.mState == GameState::STARTING)
 			{
 				for (size_t i = 0; i < pGame.mPlayers.size(); i++)
 				{
@@ -92,7 +92,7 @@ namespace Game
 				}
 
 				if (Input::GetKey(VK_SPACE) && !pGame.mActiveSnakes.empty())
-					pGame.mState = GameState::Playing;
+					pGame.mState = GameState::PLAYING;
 			}
 
 			for (auto& snake : pGame.mActiveSnakes)
@@ -102,12 +102,13 @@ namespace Game
 		void OnFixedTick(GameInstance& pGame, const GameTime& pTime)
 		{
 			for (auto& snake : pGame.mActiveSnakes)
-			{
-				if (pGame.mState == GameState::Playing && snake.mIsAlive)
-					TickPlayer(pGame, pTime, snake);
-				else if (pGame.mState == GameState::GameOver && !snake.mIsAlive)
-					TickPlayer(pGame, pTime, snake);
-			}
+				TickCollision(pGame, pTime, snake);
+
+			for (auto& snake : pGame.mActiveSnakes)
+				TickPlayer(pGame, pTime, snake);
+
+			if (pGame.mState == PLAYING && pGame.mLivingSnakes < ((pGame.mPvpEnabled) ? 2 : 1))
+				pGame.mState = GAMEOVER;
 		}
 
 		void OnDraw(GameInstance& pGame, const GameTime& pTime)
@@ -118,13 +119,13 @@ namespace Game
 			DrawTileMap(pGame.mTileMap, 1, 1);
 			DrawSideInfo(pGame, pTime);
 
-			if (pGame.mState == GameState::Starting)
+			if (pGame.mState == GameState::STARTING)
 			{
 				DrawCenteredString(pGame.mTileMap, "Waiting for players...", 2);
 				DrawCenteredString(pGame.mTileMap, "- Press 'Space' to start -", 1, 1);
 			}
 
-			if (pGame.mState == GameState::GameOver)
+			if (pGame.mState == GameState::GAMEOVER)
 			{
 				DrawCenteredString(pGame.mTileMap, "Game Over", 2);
 				DrawCenteredString(pGame.mTileMap, "- Press 'F1' to restart -", 1, 1);
@@ -320,8 +321,8 @@ namespace Game
 
 	namespace PlayerMechanics
 	{
-		using namespace Game::Mechanics;
 		using namespace Game;
+		using namespace Mechanics;
 
 		void InitNewSnake(GameInstance& pGame, ID pPlayerId)
 		{
@@ -346,6 +347,18 @@ namespace Game
 				pSnake.mPositions.push_back(pSnake.mPositions.back());
 		}
 
+		void TickCollision(GameInstance& pGame, const GameTime pTime, PlayerSnake& pSnake)
+		{
+			if (pGame.mState != PLAYING)
+				return;
+
+			Tile* collidedTile = pGame.mTileMap[pGame.mTileMap(
+				pSnake.mPositions.front() + pSnake.mDirection)];
+
+			if (collidedTile)
+				collidedTile->mColEvent(pGame, pSnake, collidedTile);
+		}
+
 		void TickPlayer(GameInstance& pGame, const GameTime& pTime, PlayerSnake& pSnake)
 		{
 			if (pSnake.mPositions.empty()) return;
@@ -358,11 +371,7 @@ namespace Game
 				return;
 			}
 
-			Tile* collidedTile = pGame.mTileMap[pGame.mTileMap(
-				pSnake.mPositions.front() + pSnake.mDirection)];
-
-			if (collidedTile && collidedTile->mColEvent(pGame, pSnake, collidedTile))
-				return;
+			if (pGame.mState != PLAYING) return;
 
 			Vector2Int oldTail = pSnake.mPositions.back();
 			PlaceTile(pGame.mTileMap, nullptr, oldTail);
@@ -375,6 +384,9 @@ namespace Game
 
 		void TickInput(GameInstance& pGame, const GameTime& pTime, PlayerSnake& pSnake)
 		{
+			if (pGame.mState != PLAYING)
+				return;
+
 			int inputX =
 				Math::Clamp(Input::GetKey(pSnake.mPlayer->mInput.mRight))
 				- Math::Clamp(Input::GetKey(pSnake.mPlayer->mInput.mLeft));
@@ -402,10 +414,6 @@ namespace Game
 
 			pGame.mLivingSnakes--;
 			pSnake.mIsAlive = false;
-
-			if ((pGame.mPvpEnabled && pGame.mLivingSnakes < 2) ||
-				(!pGame.mPvpEnabled && pGame.mLivingSnakes < 1))
-					pGame.mState = GameState::GameOver;
 		}
 	}
 

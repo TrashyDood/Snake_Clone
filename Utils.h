@@ -135,6 +135,52 @@ namespace Rendering
 	inline RendBuffer renderBuffer(3600);
 }
 
+namespace Collections
+{
+	template<typename T>
+	class DLinkedList
+	{
+		class Node
+		{
+			T mItem;
+			Node *mNext = nullptr,
+				*mPrev = nullptr;
+		};
+
+		Node *mFirst = nullptr,
+			*mLast = nullptr;
+
+	public:
+		Node* PushForward(T pItem)
+		{
+			Node* newNode = new Node{ pItem };
+
+			newNode->mNext = mFirst;
+
+			if (mFirst) mFirst->mPrev = newNode;
+			else mLast = newNode;
+
+			mFirst = newNode;
+
+			return newNode;
+		}
+
+		Node* PushBack(T pItem)
+		{
+			Node* newNode = new Node{ pItem };
+
+			newNode->mPrev = mLast;
+
+			if (mLast) mLast->mNext = newNode;
+			else mFirst = newNode;
+
+			mLast = newNode;
+
+			return newNode;
+		}
+	};
+}
+
 namespace Input
 {
 	inline int GetKey(KeyID pKey) { return GetAsyncKeyState(pKey) & 0x8000; }
