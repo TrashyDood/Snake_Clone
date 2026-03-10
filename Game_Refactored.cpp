@@ -11,15 +11,13 @@ namespace Game_Refactored
 {
 	RunID RunGame()
 	{
-		GameInstance game{};
+		GameInstance game(std::filesystem::current_path());
+		game.OnInit();
 
 		GameTime time{};
 		GameTime fixedTime{ duration<float>(1.0f / 8) };
 		GameTime drawTime{ duration<float>(1.0f / 24) };
-
 		Rendering::RendBuffer renderBuffer(3600);
-
-		game.OnInit();
 
 		steady_clock::time_point previousTime = steady_clock::now();
 		duration<float> fixedAccumulator(0.0f), drawAccumulator(0.0f);
@@ -62,10 +60,10 @@ namespace Game_Refactored
 
 	void GameInstance::OnInit()
 	{
+		std::fstream file("ad", std::ios::in | std::ios::out);
+
 		for (size_t i = 0; i < mPlayers.size(); i++)
 			mPlayers[i].mId = i;
-
-
 	}
 
 	void GameInstance::OnTick(const GameTime& pTime)
@@ -108,7 +106,7 @@ namespace Game_Refactored
 				tile = mTileMap[pos];
 
 				if (tile)
-					Rendering::renderBuffer.DrawCharCoords(tile->mSymbol, x, y, tile->mColor);
+					pBuffer.DrawCharCoords(tile->mSymbol, x, y, tile->mColor);
 			}
 
 		pBuffer.RenderBuffers();
@@ -117,6 +115,11 @@ namespace Game_Refactored
 	RunID GameInstance::OnExit()
 	{
 		return mRunId;
+	}
+
+	void GameInstance::ParseLevel(TileMap& pTileMap)
+	{
+
 	}
 
 	void PlayerSnake::OnTick(const GameTime& pTime)

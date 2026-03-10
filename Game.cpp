@@ -113,9 +113,9 @@ namespace Game
 
 		void OnDraw(GameInstance& pGame, const GameTime& pTime)
 		{
-			renderBuffer.ClearBuffers();
+			//renderBuffer.ClearBuffers();
 
-			renderBuffer.DrawOutline('+', pGame.mTileMap.mWidth + 2, pGame.mTileMap.mHeight + 2, 0, 0);
+			//renderBuffer.DrawOutline('+', pGame.mTileMap.mWidth + 2, pGame.mTileMap.mHeight + 2, 0, 0);
 			DrawTileMap(pGame.mTileMap, 1, 1);
 			DrawSideInfo(pGame, pTime);
 
@@ -131,7 +131,7 @@ namespace Game
 				DrawCenteredString(pGame.mTileMap, "- Press 'F1' to restart -", 1, 1);
 			}
 
-			renderBuffer.RenderBuffers();
+			//renderBuffer.RenderBuffers();
 		}
 
 		RunID OnExit(GameInstance& pGame, const GameTime& pTime)
@@ -142,8 +142,8 @@ namespace Game
 
 	namespace Draw
 	{
-		void DrawTile(Tile* pTile, const UINT32 pX, const UINT32 pY) { if (pTile) renderBuffer.DrawCharCoords(pTile->mSymbol, pX, pY, pTile->mColor); }
-		void DrawTile(Tile& pTile, const UINT32 pX, const UINT32 pY) { renderBuffer.DrawCharCoords(pTile.mSymbol, pX, pY, pTile.mColor); }
+		void DrawTile(Tile* pTile, const UINT32 pX, const UINT32 pY) { /*if (pTile) renderBuffer.DrawCharCoords(pTile->mSymbol, pX, pY, pTile->mColor);*/ }
+		void DrawTile(Tile& pTile, const UINT32 pX, const UINT32 pY) { /*renderBuffer.DrawCharCoords(pTile.mSymbol, pX, pY, pTile.mColor);*/ }
 
 		void DrawTileMap(TileMap& pTileMap, const UINT32 pOffsetX, const UINT32 pOffsetY)
 		{
@@ -156,7 +156,7 @@ namespace Game
 		{
 			int x = pOffsetX + pTileMap.mWidth / 2 - pStr.size() / 2;
 			int y = pOffsetY + pTileMap.mHeight / 2;
-			renderBuffer.DrawString(pStr, x, y, pColor);
+			//renderBuffer.DrawString(pStr, x, y, pColor);
 		}
 
 		void DrawSideInfo(GameInstance& pGame, const GameTime& pTime)
@@ -164,16 +164,16 @@ namespace Game
 			int offsetX = pGame.mTileMap.mWidth + 3;
 			int offsetY = 1;
 
-			renderBuffer.DrawString(std::string("PvP: ") + (pGame.mPvpEnabled ? "Enabled" : "Disabled"), offsetX, 0);
+			//renderBuffer.DrawString(std::string("PvP: ") + (pGame.mPvpEnabled ? "Enabled" : "Disabled"), offsetX, 0);
 
 			for (size_t i = 0; i < pGame.mActiveSnakes.size(); i++)
 			{
 				PlayerSnake& snake = pGame.mActiveSnakes[i];
 				int y = offsetY + i * 3;
 
-				renderBuffer.DrawString("P" + std::to_string(i + 1), offsetX, y, snake.mPlayer->mTile.mColor);
-				renderBuffer.DrawString(snake.mIsAlive ? "Alive" : "Dead", offsetX + 4, y, snake.mPlayer->mTile.mColor);
-				renderBuffer.DrawString("Score: " + std::to_string(snake.mPoints), offsetX, y + 1, snake.mPlayer->mTile.mColor);
+				//renderBuffer.DrawString("P" + std::to_string(i + 1), offsetX, y, snake.mPlayer->mTile.mColor);
+				//renderBuffer.DrawString(snake.mIsAlive ? "Alive" : "Dead", offsetX + 4, y, snake.mPlayer->mTile.mColor);
+				//renderBuffer.DrawString("Score: " + std::to_string(snake.mPoints), offsetX, y + 1, snake.mPlayer->mTile.mColor);
 			}
 		}
 	}

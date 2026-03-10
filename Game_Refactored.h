@@ -7,6 +7,8 @@
 #include <vector>
 #include <deque>
 #include <cmath>
+#include <fstream>
+#include <filesystem>
 
 using namespace std::chrono;
 
@@ -76,6 +78,7 @@ namespace Game_Refactored
 
 	class TileMap
 	{
+		private:
 		std::vector<Tile*> mTiles{};
 		UINT32 mWidth = 0, mHeight = 0, mSize = 0, mCount = 0;
 
@@ -102,7 +105,7 @@ namespace Game_Refactored
 			return pY * mWidth + pX;
 		}
 
-		TileIndex operator()(int pIndex) const
+		TileIndex operator()(TileIndex pIndex) const
 		{
 			pIndex %= static_cast<int>(mSize);
 			if (pIndex < 0) pIndex += mSize;
@@ -166,26 +169,36 @@ namespace Game_Refactored
 	public:
 		RunID mRunId = RunID::RUNNING;
 		GameState mState = GameState::STARTING;
+		const std::filesystem::path mDirectory;
 
 	private:
 		TileMap mTileMap{};
 		UINT32 mLivingSnakes = 0;
 		std::vector<PlayerSnake> mActiveSnakes{};
 
+		Tile mWallTile = { '@', FOREGROUND_GREEN | FOREGROUND_BLUE },
+			mFruitTile = { '*', FOREGROUND_GREEN, CollisionEvents::FruitCol },
+			mSuperFruitTile = { '*', FOREGROUND_RED | FOREGROUND_GREEN, CollisionEvents::SuperFruitCol },
+			mMegaFruitTile = { '*', FOREGROUND_RED | FOREGROUND_BLUE, CollisionEvents::MegaFruitCol };
+
 		std::array<Player, 4> mPlayers
 		{
-			Player({ 'D', 'W', 'A', 'S' }, {'0', FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE}),
-			Player({ 'L', 'I', 'J', 'K' }, {'0', FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE}),
-			Player({ VK_RIGHT, VK_UP, VK_LEFT, VK_DOWN }, {'0', FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE}),
-			Player({ VK_NUMPAD6, VK_NUMPAD8, VK_NUMPAD4, VK_NUMPAD5 }, {'0', FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE})
+			Player({ 'D', 'W', 'A', 'S' }, { '0', FOREGROUND_RED | FOREGROUND_INTENSITY }),
+			Player({ 'L', 'I', 'J', 'K' }, { '0', FOREGROUND_BLUE | FOREGROUND_INTENSITY }),
+			Player({ VK_RIGHT, VK_UP, VK_LEFT, VK_DOWN }, { '0', FOREGROUND_GREEN | FOREGROUND_INTENSITY }),
+			Player({ VK_NUMPAD6, VK_NUMPAD8, VK_NUMPAD4, VK_NUMPAD5 }, { '0', FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_INTENSITY })
 		};
 
 	public:
+		GameInstance(std::filesystem::path pDir) : mDirectory(pDir) {}
+
 		void OnInit();
 		void OnTick(const GameTime& pTime);
 		void OnFixedTick(const GameTime& pTime);
 		void OnDraw(const GameTime& pTime, Rendering::RendBuffer& pBuffer);
 		RunID OnExit();
+	private:
+		void ParseLevel(TileMap& pTileMap);
 	};
 
 	RunID RunGame();

@@ -24,7 +24,6 @@ namespace Math
 
 namespace Rendering
 {
-
 	inline void GetWindowSize(int& pWidth, int& pHeight)
 	{
 		CONSOLE_SCREEN_BUFFER_INFO csbi;
@@ -37,14 +36,15 @@ namespace Rendering
 	{
 	public:
 		const UINT32 mMaxSize;
-		int mWidth = 0, mHeight = 0;
-
 	private:
-		int mActiveHandle = 0;
+		int mWidth = 0, mHeight = 0;
 		char* mCharBuffer = nullptr;
 		Color* mColorBuffer = nullptr;
 
 	public:
+		inline int GetWidth() const { return mWidth; }
+		inline int GetHeight() const { return mHeight; }
+
 		inline void FillBuffer(const char pChar, const Color pColor = white)
 		{
 			for (size_t i = 0; i < mMaxSize; i++)
@@ -59,7 +59,6 @@ namespace Rendering
 		RendBuffer(const UINT32 pMaxSize = 512) :
 			mMaxSize(pMaxSize), mCharBuffer(new char[pMaxSize]()), mColorBuffer(new Color[pMaxSize]())
 		{ 
-			mActiveHandle = 1;
 			HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
 
 			DWORD dwMode = 0;
@@ -88,6 +87,9 @@ namespace Rendering
 
 		inline void DrawCharCoords(const char pChar, const UINT32 pX, const UINT32 pY, const Color pColor = white)
 		{
+			if (pX > mWidth - 1 || pX < 0 || pY > mHeight - 1 || pY < 0)
+				return;
+
 			DrawChar(pChar, pX + pY * mWidth, pColor);
 		}
 
@@ -123,7 +125,6 @@ namespace Rendering
 
 		~RendBuffer()
 		{
-			mActiveHandle = 0;
 			FlushConsoleInputBuffer(GetStdHandle(STD_INPUT_HANDLE));
 			std::cout << "\033[?1049l";
 			std::cout << "\033[?25h";
@@ -132,8 +133,6 @@ namespace Rendering
 			delete[](mColorBuffer);
 		}
 	};
-
-	inline RendBuffer renderBuffer(3600);
 }
 
 namespace Collections
