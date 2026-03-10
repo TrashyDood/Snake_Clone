@@ -24,6 +24,7 @@ namespace Math
 
 namespace Rendering
 {
+
 	inline void GetWindowSize(int& pWidth, int& pHeight)
 	{
 		CONSOLE_SCREEN_BUFFER_INFO csbi;

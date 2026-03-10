@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Utils.h"
+#include "Tile.h"
 #include <chrono>
 #include <array>
 #include <vector>
@@ -14,6 +15,23 @@ typedef unsigned short ID;
 
 namespace Game_Refactored
 {
+	// Too lazy to make new files...
+#pragma region Forward Declarations
+	struct GameInstance;
+	struct Player;
+	struct PlayerSnake;
+	struct Tile;
+	typedef bool (*CollisionEvent)(GameInstance&, PlayerSnake&, Tile*);
+
+	namespace CollisionEvents
+	{
+		bool FruitCol(GameInstance& pGame, PlayerSnake& pSnake, Tile* pTile);
+		bool SuperFruitCol(GameInstance& pGame, PlayerSnake& pSnake, Tile* pTile);
+		bool MegaFruitCol(GameInstance& pGame, PlayerSnake& pSnake, Tile* pTile);
+		bool DeathCol(GameInstance& pGame, PlayerSnake& pSnake, Tile* pTile);
+	}
+#pragma endregion
+
 	enum RunID : ID
 	{
 		EXIT = 0,
@@ -41,11 +59,13 @@ namespace Game_Refactored
 		steady_clock::time_point mTime{};
 		float mDeltaTime = 0;
 	};
-
+	
 	struct Tile
 	{
+	public:
 		char mSymbol;
-		unsigned long mColor;
+		Color mColor;
+		CollisionEvent mColEvent = CollisionEvents::DeathCol;
 
 		const bool operator==(const Tile& pOther) const
 		{
@@ -54,11 +74,12 @@ namespace Game_Refactored
 		}
 	};
 
-	struct TileMap
+	class TileMap
 	{
-		std::vector<Tile*> mTiles;
-		UINT32 mWidth, mHeight, mSize, mCount = 0;
+		std::vector<Tile*> mTiles{};
+		UINT32 mWidth = 0, mHeight = 0, mSize = 0, mCount = 0;
 
+	public:
 		Vector2Int operator()(Vector2Int pVector) const
 		{
 			pVector.x %= static_cast<int>(mWidth);
@@ -89,19 +110,20 @@ namespace Game_Refactored
 			return pIndex;
 		}
 
-		Tile*& operator[](const TileIndex pIndex)
-		{
-			return mTiles[pIndex];
-		}
-
-		Tile*& operator[](const Vector2Int pVector)
-		{
-			return operator[](pVector.x + pVector.y * mWidth);
-		}
+		Tile*& operator[](const TileIndex pIndex) { return mTiles[pIndex]; }
+		Tile*& operator[](const Vector2Int pVector) { return operator[](pVector.x + pVector.y * mWidth); }
 
 		TileMap(const UINT32 pWidth = 20, const UINT32 pHeight = 20) :
 			mWidth(pWidth), mHeight(pHeight), mSize(pWidth* pHeight), mTiles(pWidth* pHeight, nullptr) {
 		}
+
+		const UINT32 GetCount() const { return mCount; }
+		const UINT32 GetSize() const { return mSize; }
+		const UINT32 GetWidth() const { return mWidth; }
+		const UINT32 GetHeight() const { return mHeight; }
+		const std::vector<Tile*>& GetTiles() const { return mTiles; }
+		const Tile* GetTile(Vector2Int pVector) const { return mTiles[operator()(pVector.x, pVector.y)]; }
+		const void SetTile(Tile* pTile, Vector2Int pVector) { mTiles[operator()(pVector.x, pVector.y)] = pTile; }
 	};
 
 	struct PlayerInput
@@ -109,20 +131,19 @@ namespace Game_Refactored
 		KeyID mRight, mUp,
 			mLeft, mDown,
 			mActivate;
+
+		const void GetAxis(Vector2Int& pAxis);
 	};
 
-	struct Player
+	class Player
 	{
+	public:
 		PlayerInput mInput;
 		Tile mTile;
 		ID mId = 0;
-
-		Player(PlayerInput pInput, Tile pTile)
-			: mInput(pInput), mTile(pTile) {
-		}
 	};
 
-	struct PlayerSnake
+	class PlayerSnake
 	{
 	public:
 		Player& mPlayer;
@@ -137,7 +158,6 @@ namespace Game_Refactored
 	public:
 		void OnTick(const GameTime& pTime);
 		void OnFixedTick(const GameTime& pTime);
-		void TickInput(const GameTime& pTime);
 		void TickCollisions(const GameTime& pTime);
 	};
 
@@ -148,34 +168,28 @@ namespace Game_Refactored
 		GameState mState = GameState::STARTING;
 
 	private:
-		TileMap mTileMap;
-		UINT32 mLivingSnakes;
+		TileMap mTileMap{};
+		UINT32 mLivingSnakes = 0;
 		std::vector<PlayerSnake> mActiveSnakes{};
-
-		Tile mWallTile = { '@', FOREGROUND_GREEN | FOREGROUND_BLUE },
-			mFruitTile = { '*', FOREGROUND_GREEN },
-			mSuperFruitTile = { '*', FOREGROUND_RED | FOREGROUND_GREEN },
-			mMegaFruitTile = { '*', FOREGROUND_RED | FOREGROUND_BLUE };
 
 		std::array<Player, 4> mPlayers
 		{
-			Player({ 'D', 'W', 'A', 'S' }, { '0', FOREGROUND_RED | FOREGROUND_INTENSITY }),
-			Player({ 'L', 'I', 'J', 'K' }, { '0', FOREGROUND_BLUE | FOREGROUND_INTENSITY }),
-			Player({ VK_RIGHT, VK_UP, VK_LEFT, VK_DOWN }, { '0', FOREGROUND_GREEN | FOREGROUND_INTENSITY }),
-			Player({ VK_NUMPAD6, VK_NUMPAD8, VK_NUMPAD4, VK_NUMPAD5 }, { '0', FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_INTENSITY })
+			Player({ 'D', 'W', 'A', 'S' }, {'0', FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE}),
+			Player({ 'L', 'I', 'J', 'K' }, {'0', FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE}),
+			Player({ VK_RIGHT, VK_UP, VK_LEFT, VK_DOWN }, {'0', FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE}),
+			Player({ VK_NUMPAD6, VK_NUMPAD8, VK_NUMPAD4, VK_NUMPAD5 }, {'0', FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE})
 		};
 
 	public:
 		void OnInit();
 		void OnTick(const GameTime& pTime);
 		void OnFixedTick(const GameTime& pTime);
-		void OnDraw(const GameTime& pTime);
+		void OnDraw(const GameTime& pTime, Rendering::RendBuffer& pBuffer);
 		RunID OnExit();
-
-
 	};
 
 	RunID RunGame();
+	void GetAxis(Vector2Int& pAxis);
 }
 
 
