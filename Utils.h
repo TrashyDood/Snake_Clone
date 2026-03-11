@@ -54,7 +54,11 @@ namespace Rendering
 			}
 		}
 
-		inline void ClearBuffers() { FillBuffer(' '); }
+		inline void ClearBuffers()
+		{
+			GetWindowSize(mWidth, mHeight);
+			FillBuffer(' '); 
+		}
 
 		RendBuffer(const UINT32 pMaxSize = 512) :
 			mMaxSize(pMaxSize), mCharBuffer(new char[pMaxSize]()), mColorBuffer(new Color[pMaxSize]())
@@ -115,9 +119,6 @@ namespace Rendering
 
 		inline void RenderBuffers(const COORD pCoord = { 0, 0 })
 		{
-
-			GetWindowSize(mWidth, mHeight);
-
 			DWORD written = 0;
 			WriteConsoleOutputCharacterA(GetStdHandle(STD_OUTPUT_HANDLE), mCharBuffer, mMaxSize, pCoord, &written);
 			WriteConsoleOutputAttribute(GetStdHandle(STD_OUTPUT_HANDLE), mColorBuffer, mMaxSize, pCoord, &written);

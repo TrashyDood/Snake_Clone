@@ -78,9 +78,12 @@ namespace Game_Refactored
 
 	class TileMap
 	{
-		private:
+	public:
+		UINT32 mWidth = 0, mHeight = 0;
+
+	private:
 		std::vector<Tile*> mTiles{};
-		UINT32 mWidth = 0, mHeight = 0, mSize = 0, mCount = 0;
+		UINT32 mCount = 0;
 
 	public:
 		Vector2Int operator()(Vector2Int pVector) const
@@ -107,8 +110,8 @@ namespace Game_Refactored
 
 		TileIndex operator()(TileIndex pIndex) const
 		{
-			pIndex %= static_cast<int>(mSize);
-			if (pIndex < 0) pIndex += mSize;
+			pIndex %= static_cast<int>(GetSize());
+			if (pIndex < 0) pIndex += GetSize();	
 
 			return pIndex;
 		}
@@ -116,17 +119,19 @@ namespace Game_Refactored
 		Tile*& operator[](const TileIndex pIndex) { return mTiles[pIndex]; }
 		Tile*& operator[](const Vector2Int pVector) { return operator[](pVector.x + pVector.y * mWidth); }
 
-		TileMap(const UINT32 pWidth = 20, const UINT32 pHeight = 20) :
-			mWidth(pWidth), mHeight(pHeight), mSize(pWidth* pHeight), mTiles(pWidth* pHeight, nullptr) {
+		TileMap(const UINT32 pWidth, const UINT32 pHeight) :
+			mWidth(pWidth), mHeight(pHeight), mTiles(pWidth * pHeight, nullptr) {
 		}
 
-		const UINT32 GetCount() const { return mCount; }
-		const UINT32 GetSize() const { return mSize; }
-		const UINT32 GetWidth() const { return mWidth; }
-		const UINT32 GetHeight() const { return mHeight; }
-		const std::vector<Tile*>& GetTiles() const { return mTiles; }
-		const Tile* GetTile(Vector2Int pVector) const { return mTiles[operator()(pVector.x, pVector.y)]; }
-		const void SetTile(Tile* pTile, Vector2Int pVector) { mTiles[operator()(pVector.x, pVector.y)] = pTile; }
+		TileMap(const UINT32 pSize = 25) : mTiles(pSize, nullptr) {}
+
+		const inline UINT32 GetCount() const { return mCount; }
+		const inline UINT32 GetSize() const { return mTiles.size(); }
+		const inline UINT32 GetWidth() const { return mWidth; }
+		const inline UINT32 GetHeight() const { return mHeight; }
+		const inline std::vector<Tile*>& GetTiles() const { return mTiles; }
+		const inline Tile* GetTile(Vector2Int pVector) const { return mTiles[operator()(pVector.x, pVector.y)]; }
+		const inline void SetTile(Tile* pTile, Vector2Int pVector) { mTiles[operator()(pVector.x, pVector.y)] = pTile; }
 	};
 
 	struct PlayerInput
@@ -136,6 +141,7 @@ namespace Game_Refactored
 			mActivate;
 
 		const void GetAxis(Vector2Int& pAxis);
+		const bool IsInputting();
 	};
 
 	class Player
@@ -150,40 +156,47 @@ namespace Game_Refactored
 	{
 	public:
 		Player& mPlayer;
+		Vector2Int mDirection{};
 
 	private:
-		std::deque<Vector2Int> mPositions{};
-		Vector2Int mDirection{};
+		GameInstance& mGame;
+		std::deque<Vector2Int> mPositions;
 		bool mIsAlive = true;
 		int mPoints = -1,
 			mSpeed = 2;
 
 	public:
+		PlayerSnake(Player& pPlayer, GameInstance& pGame, Vector2Int pStartPos = {0, 0}) :
+			mPlayer(pPlayer), mGame(pGame), mPositions(2, pStartPos) { }
+
+		const inline Vector2Int Head() const { return mPositions.front(); }
+		const inline Vector2Int Tail() const { return mPositions.back(); }
+
 		void OnTick(const GameTime& pTime);
 		void OnFixedTick(const GameTime& pTime);
-		void TickCollisions(const GameTime& pTime);
+		void OnTickCollisions(const GameTime& pTime);
 	};
 
 	class GameInstance
 	{
 	public:
-		RunID mRunId = RunID::RUNNING;
-		GameState mState = GameState::STARTING;
+		RunID mRunId = RUNNING;
+		GameState mState = STARTING;
 		const std::filesystem::path mDirectory;
+		TileMap mTileMap;
 
 	private:
-		TileMap mTileMap{};
 		UINT32 mLivingSnakes = 0;
 		std::vector<PlayerSnake> mActiveSnakes{};
 
-		Tile mWallTile = { '@', FOREGROUND_GREEN | FOREGROUND_BLUE },
+		Tile mWallTile = { ' ', BACKGROUND_GREEN | BACKGROUND_BLUE },
 			mFruitTile = { '*', FOREGROUND_GREEN, CollisionEvents::FruitCol },
 			mSuperFruitTile = { '*', FOREGROUND_RED | FOREGROUND_GREEN, CollisionEvents::SuperFruitCol },
 			mMegaFruitTile = { '*', FOREGROUND_RED | FOREGROUND_BLUE, CollisionEvents::MegaFruitCol };
 
 		std::array<Player, 4> mPlayers
 		{
-			Player({ 'D', 'W', 'A', 'S' }, { '0', FOREGROUND_RED | FOREGROUND_INTENSITY }),
+			Player({ 'D', 'W', 'A', 'S' }, { '0', BACKGROUND_RED | BACKGROUND_INTENSITY }),
 			Player({ 'L', 'I', 'J', 'K' }, { '0', FOREGROUND_BLUE | FOREGROUND_INTENSITY }),
 			Player({ VK_RIGHT, VK_UP, VK_LEFT, VK_DOWN }, { '0', FOREGROUND_GREEN | FOREGROUND_INTENSITY }),
 			Player({ VK_NUMPAD6, VK_NUMPAD8, VK_NUMPAD4, VK_NUMPAD5 }, { '0', FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_INTENSITY })
@@ -192,13 +205,18 @@ namespace Game_Refactored
 	public:
 		GameInstance(std::filesystem::path pDir) : mDirectory(pDir) {}
 
+		const inline bool PVPEnabled() const { return mActiveSnakes.size() > 1; }
+		inline TileMap& GetTileMap() { return mTileMap; }
+
 		void OnInit();
 		void OnTick(const GameTime& pTime);
 		void OnFixedTick(const GameTime& pTime);
 		void OnDraw(const GameTime& pTime, Rendering::RendBuffer& pBuffer);
 		RunID OnExit();
 	private:
-		void ParseLevel(TileMap& pTileMap);
+		void LoadLevel();
+		void InitNewSnake(Player& pPlayer);
+		bool IsPlayerActive(Player& pPlayer);
 	};
 
 	RunID RunGame();

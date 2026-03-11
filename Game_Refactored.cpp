@@ -4,6 +4,7 @@
 #include <stdexcept>
 #include <cmath>
 #include <random>
+#include <sstream>
 
 using namespace std::chrono;
 
@@ -60,22 +61,25 @@ namespace Game_Refactored
 
 	void GameInstance::OnInit()
 	{
-		std::fstream file("ad", std::ios::in | std::ios::out);
-
 		for (size_t i = 0; i < mPlayers.size(); i++)
 			mPlayers[i].mId = i;
+
+		LoadLevel();
 	}
 
 	void GameInstance::OnTick(const GameTime& pTime)
 	{
-		if (Input::GetKey(VK_ESCAPE)) mRunId = RunID::EXIT;
-		if (Input::GetKey(VK_F1)) mRunId = RunID::RESTART;
+		if (Input::GetKey(VK_ESCAPE)) mRunId = EXIT;
+		if (Input::GetKey(VK_F1)) LoadLevel();
+		if (Input::GetKey('R')) mRunId = RESTART;
 
 		if (mState == GameState::STARTING)
 		{
+			Vector2Int input = { 0,0 };
 			for (auto& player : mPlayers)
 			{
-
+				if (!IsPlayerActive(player) && player.mInput.IsInputting())
+					InitNewSnake(player);
 			}
 
 			if (Input::GetKey(VK_SPACE) && !mActiveSnakes.empty())
@@ -88,6 +92,9 @@ namespace Game_Refactored
 
 	void GameInstance::OnFixedTick(const GameTime& pTime)
 	{
+		for (auto& snake : mActiveSnakes)
+			snake.OnTickCollisions(pTime);
+
 		for (auto& snake : mActiveSnakes)
 			snake.OnFixedTick(pTime);
 	}
@@ -117,9 +124,47 @@ namespace Game_Refactored
 		return mRunId;
 	}
 
-	void GameInstance::ParseLevel(TileMap& pTileMap)
+	void GameInstance::LoadLevel()
 	{
+		std::fstream file(std::filesystem::current_path().string() +
+			"\\LevelData.txt", std::ios::in | std::ios::out);
 
+		std::string line;
+		std::string content;
+
+		UINT32 height = 0, width = 0;
+		while (std::getline(file, line))
+		{
+			if (line.empty()) break;
+
+			if (height == 0) width = line.size();
+
+			height++;
+			content.append(line);
+		}
+
+		mTileMap = TileMap(width, height);
+
+		for (size_t i = 0; i < content.size(); i++)
+			if (content[i] != ' ')
+				mTileMap[i] = &mWallTile;
+	}
+
+	void GameInstance::InitNewSnake(Player& pPlayer)
+	{
+		Vector2Int pos = { 1,1 };
+
+		mActiveSnakes.push_back(PlayerSnake(pPlayer, *this, pos));
+		mTileMap.SetTile(&pPlayer.mTile, pos);
+		mLivingSnakes++;
+	}
+
+	bool GameInstance::IsPlayerActive(Player& pPlayer)
+	{
+		for (auto& snake : mActiveSnakes)
+			if (snake.mPlayer.mId == pPlayer.mId)
+				return true;
+		return false;
 	}
 
 	void PlayerSnake::OnTick(const GameTime& pTime)
@@ -129,12 +174,37 @@ namespace Game_Refactored
 
 	void PlayerSnake::OnFixedTick(const GameTime& pTime)
 	{
+		if (mPositions.empty()) return;
 
+		if (!mIsAlive)
+		{
+			mGame.GetTileMap().SetTile(nullptr, Head());
+			mPositions.pop_front();
+
+			return;
+		}
+
+		if (mGame.mState != PLAYING) return;
+
+		Vector2Int oldTail = Tail();
+		mGame.GetTileMap().SetTile(nullptr, oldTail);
+		mPositions.pop_back();
+
+		Vector2Int newHead = mGame.GetTileMap()(mPositions.front() + mDirection);
+		mGame.GetTileMap().SetTile(&mPlayer.mTile, newHead);
+		mPositions.push_front(newHead);
 	}
 
-	void PlayerSnake::TickCollisions(const GameTime& pTime)
+	void PlayerSnake::OnTickCollisions(const GameTime& pTime)
 	{
+		if (mGame.mState != PLAYING)
+			return;
 
+		Tile* collidedTile = mGame.mTileMap[mGame.mTileMap(
+			Head() + mDirection)];
+
+		if (collidedTile)
+			collidedTile->mColEvent(mGame, *this, collidedTile);
 	}
 
 	namespace CollisionEvents
@@ -180,5 +250,11 @@ namespace Game_Refactored
 			pAxis.x = 0;
 			pAxis.y = inputY;
 		}
+	}
+
+	const bool PlayerInput::IsInputting()
+	{
+		return Input::GetKey(mRight) + Input::GetKey(mLeft) +
+			Input::GetKey(mDown) + Input::GetKey(mUp);
 	}
 }
