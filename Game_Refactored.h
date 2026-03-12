@@ -137,8 +137,8 @@ namespace Game_Refactored
 		KeyID mRight, mUp,
 			mLeft, mDown;
 
-		const void GetAxis(Vector2Int& pAxis);
-		const bool IsInputting();
+		const void GetAxis(Vector2Int& pAxis) const;
+		const bool IsInputting() const;
 	};
 
 	struct Player
@@ -151,27 +151,32 @@ namespace Game_Refactored
 	class PlayerSnake
 	{
 	public:
-		Player& mPlayer;
-		Vector2Int mDirection{};
+		Player* mPlayer;
+		Vector2Int mDirection;
 
 	private:
-		GameInstance& mGame;
 		std::deque<Vector2Int> mPositions;
 		bool mIsAlive = true;
 		int mPoints = -1,
 			mSpeed = 2;
 
 	public:
-		PlayerSnake(Player& pPlayer, GameInstance& pGame, Vector2Int pStartPos = {0, 0}) :
-			mPlayer(pPlayer), mGame(pGame), mPositions(2, pStartPos) { }
+		PlayerSnake(const PlayerSnake&) = delete;
+		PlayerSnake& operator=(const PlayerSnake&) = delete;
+
+		PlayerSnake(PlayerSnake&&) = default;
+		PlayerSnake& operator=(PlayerSnake&&) = default;
+
+		PlayerSnake(Player& pPlayer, Vector2Int pStartPos = {0, 0}, Vector2Int pStartDir = {1, 0}) :
+			mPlayer(&pPlayer), mPositions(2, pStartPos), mDirection(pStartDir) { }
 
 		const inline Vector2Int Head() const { return mPositions.front(); }
 		const inline Vector2Int Tail() const { return mPositions.back(); }
 		const inline bool IsAlive() const { return mIsAlive; }
 
-		void OnTick(const GameTime& pTime);
-		void OnFixedTick(const GameTime& pTime);
-		void OnTickCollisions(const GameTime& pTime);
+		void OnTick(const GameTime& pTime, GameInstance& pGame);
+		void OnFixedTick(const GameTime& pTime, GameInstance& pGame);
+		void OnTickCollisions(const GameTime& pTime, GameInstance& pGame);
 
 		void OnKilled();
 	};
@@ -204,7 +209,8 @@ namespace Game_Refactored
 		const inline bool PVPEnabled() const { return mActiveSnakes.size() > 1; }
 		inline TileMap& GetTileMap() { return mTileMap; }
 
-		const inline void KillSnake(PlayerSnake& pSnake);
+		inline void KillSnake(PlayerSnake& pSnake);
+		inline void RemoveSnake(PlayerSnake& pSnake);
 
 		void OnInit();
 		void OnTick(const GameTime& pTime);
@@ -218,5 +224,4 @@ namespace Game_Refactored
 	};
 
 	RunID RunGame();
-	void GetAxis(Vector2Int& pAxis);
 }

@@ -15,8 +15,6 @@ namespace Game_Refactored
 		GameInstance game;
 		game.OnInit();
 
-		//Rendering::SetWindowSize(300, 200);
-
 		GameTime time{};
 		GameTime fixedTime{ duration<float>(1.0f / 8) };
 		GameTime drawTime{ duration<float>(1.0f / 24) };
@@ -61,13 +59,22 @@ namespace Game_Refactored
 		return game.OnExit();
 	}
 
-	inline const void GameInstance::KillSnake(PlayerSnake& pSnake)
+	inline void GameInstance::KillSnake(PlayerSnake& pSnake)
 	{
 		if (!pSnake.IsAlive())
 			return;
 
 		pSnake.OnKilled();
 		mLivingSnakes--;
+	}
+
+	inline void GameInstance::RemoveSnake(PlayerSnake& pSnake)
+	{
+		auto it = std::find_if(mActiveSnakes.begin(), mActiveSnakes.end(),
+			[&pSnake](const PlayerSnake& s) { return &s == &pSnake; });
+
+		if (it != mActiveSnakes.end())
+			mActiveSnakes.erase(it);
 	}
 
 	void GameInstance::OnInit()
@@ -98,37 +105,37 @@ namespace Game_Refactored
 		}
 
 		for (auto& snake : mActiveSnakes)
-			snake.OnTick(pTime);
+			snake.OnTick(pTime, *this);
 	}
 
 	void GameInstance::OnFixedTick(const GameTime& pTime)
 	{
 		for (auto& snake : mActiveSnakes)
-			snake.OnTickCollisions(pTime);
+			snake.OnTickCollisions(pTime, *this);
 
 		for (auto& snake : mActiveSnakes)
-			snake.OnFixedTick(pTime);
+			snake.OnFixedTick(pTime, *this);
 	}
 
 	void GameInstance::OnDraw(const GameTime& pTime, Rendering::RendBuffer& pBuffer)
 	{
 		pBuffer.ClearBuffers();
 
-		Vector2Int pos = { 0,0 };
 		int centerX = pBuffer.mWidth / 2 - mTileMap.mWidth / 2,
 			centerY = pBuffer.mHeight / 2 - mTileMap.mHeight / 2;
 
-
 		Tile* tile = nullptr;
-		for (size_t x = 0; x < mTileMap.mWidth; x++)
-			for (size_t y = 0; y < mTileMap.mHeight; y++)
+		for (int x = 0; x < mTileMap.mWidth; x++)
+			for (int y = 0; y < mTileMap.mHeight; y++)
 			{
-				pos.x = x;
-				pos.y = y;
-				tile = mTileMap[pos];
+				tile = mTileMap[{ x, y }];
 
-				if (tile) pBuffer.DrawCharCoords(tile->mSymbol, x + centerX, y + centerY, tile->mColor);
-				else pBuffer.DrawCharCoords('.', x + centerX, y + centerY, white);
+				if (tile) // Draw tile map.
+					pBuffer.DrawCharCoords(tile->mSymbol, x + centerX, y + centerY, tile->mColor);
+				else if (x > 0 && x < mTileMap.mWidth - 1 && y > 0 && y < mTileMap.mHeight - 1) // Draw floor.
+					pBuffer.DrawCharCoords('.', x + centerX, y + centerY, white);
+				else // Draw borders.
+					pBuffer.DrawCharCoords('+', x + centerX, y + centerY, FOREGROUND_RED | FOREGROUND_BLUE);
 			}
 
 		pBuffer.RenderBuffers();
@@ -177,61 +184,95 @@ namespace Game_Refactored
 	{
 		Vector2Int pos = { 1,1 };
 
-		mActiveSnakes.push_back(PlayerSnake(pPlayer, *this, pos));
-		mTileMap.SetTile(&pPlayer.mTile, pos);
 		mLivingSnakes++;
+		mActiveSnakes.push_back(PlayerSnake(pPlayer, pos));
+		mTileMap.SetTile(&pPlayer.mTile, pos);
 	}
 
 	bool GameInstance::IsPlayerActive(Player& pPlayer)
 	{
 		for (auto& snake : mActiveSnakes)
-			if (snake.mPlayer.mId == pPlayer.mId)
+			if (snake.mPlayer == &pPlayer)
 				return true;
 		return false;
 	}
 
-	void PlayerSnake::OnTick(const GameTime& pTime)
+	void PlayerSnake::OnTick(const GameTime& pTime, GameInstance& pGame)
 	{
-		mPlayer.mInput.GetAxis(mDirection);
+		if (!mIsAlive) return;
+
+		mPlayer->mInput.GetAxis(mDirection);
 	}
 
-	void PlayerSnake::OnFixedTick(const GameTime& pTime)
+	void PlayerSnake::OnFixedTick(const GameTime& pTime, GameInstance& pGame)
 	{
-		if (mPositions.empty()) return;
+		if (mPositions.empty())
+		{
+			pGame.RemoveSnake(*this);
+			return;
+		}
 
 		if (!mIsAlive)
 		{
-			mGame.GetTileMap().SetTile(nullptr, Head());
+			pGame.GetTileMap().SetTile(nullptr, Head());
 			mPositions.pop_front();
 
 			return;
 		}
 
-		if (mGame.mState != PLAYING) return;
+		if (pGame.mState != PLAYING) return;
 
-		mGame.GetTileMap().SetTile(nullptr, Tail());
+		pGame.GetTileMap().SetTile(nullptr, Tail());
 		mPositions.pop_back();
 
-		Vector2Int newHead = mGame.GetTileMap()(Head() + mDirection);
-		mGame.GetTileMap().SetTile(&mPlayer.mTile, newHead);
+		Vector2Int newHead = pGame.GetTileMap()(Head() + mDirection);
+		pGame.GetTileMap().SetTile(&mPlayer->mTile, newHead);
 		mPositions.push_front(newHead);
 	}
 
-	void PlayerSnake::OnTickCollisions(const GameTime& pTime)
+	void PlayerSnake::OnTickCollisions(const GameTime& pTime, GameInstance& pGame)
 	{
-		if (mGame.mState != PLAYING)
+		if (pGame.mState != PLAYING || !mIsAlive)
 			return;
 
-		Tile* collidedTile = mGame.mTileMap[mGame.mTileMap(
+		Tile* collidedTile = pGame.mTileMap[pGame.mTileMap(
 			Head() + mDirection)];
 
 		if (collidedTile)
-			collidedTile->mColEvent(mGame, *this, collidedTile);
+			collidedTile->mColEvent(pGame, *this, collidedTile);
 	}
 
 	void PlayerSnake::OnKilled()
 	{
 		mIsAlive = false;
+	}
+
+	const void PlayerInput::GetAxis(Vector2Int& pAxis) const
+	{
+		int inputX =
+			Math::Clamp(Input::GetKey(mRight))
+			- Math::Clamp(Input::GetKey(mLeft));
+		int inputY =
+			Math::Clamp(Input::GetKey(mDown))
+			- Math::Clamp(Input::GetKey(mUp));
+
+		if (inputX != 0 && pAxis.x == 0)
+		{
+			pAxis.y = 0;
+			pAxis.x = inputX;
+		}
+
+		if (inputY != 0 && pAxis.y == 0)
+		{
+			pAxis.x = 0;
+			pAxis.y = inputY;
+		}
+	}
+
+	const bool PlayerInput::IsInputting() const
+	{
+		return Input::GetKey(mRight) + Input::GetKey(mLeft) +
+			Input::GetKey(mDown) + Input::GetKey(mUp);
 	}
 
 	namespace CollisionEvents
@@ -256,33 +297,5 @@ namespace Game_Refactored
 			pGame.KillSnake(pSnake);
 			return true;
 		}
-	}
-
-	const void PlayerInput::GetAxis(Vector2Int& pAxis)
-	{
-		int inputX =
-			Math::Clamp(Input::GetKey(mRight))
-			- Math::Clamp(Input::GetKey(mLeft));
-		int inputY =
-			Math::Clamp(Input::GetKey(mDown))
-			- Math::Clamp(Input::GetKey(mUp));
-
-		if (inputX != 0 && pAxis.x == 0)
-		{
-			pAxis.y = 0;
-			pAxis.x = inputX;
-		}
-
-		if (inputY != 0 && pAxis.y == 0)
-		{
-			pAxis.x = 0;
-			pAxis.y = inputY;
-		}
-	}
-
-	const bool PlayerInput::IsInputting()
-	{
-		return Input::GetKey(mRight) + Input::GetKey(mLeft) +
-			Input::GetKey(mDown) + Input::GetKey(mUp);
 	}
 }
