@@ -182,7 +182,7 @@ namespace Game_Refactored
 
 	void GameInstance::InitNewSnake(Player& pPlayer)
 	{
-		Vector2Int pos = { 1,1 };
+		Vector2Int pos = { 1, 1 };
 
 		mLivingSnakes++;
 		mActiveSnakes.push_back(PlayerSnake(pPlayer, pos));

@@ -52,7 +52,12 @@ namespace Game_Refactored
 	struct Vector2Int
 	{
 		int x = 0, y = 0;
+
 		Vector2Int operator+(const Vector2Int& other) const { return { x + other.x, y + other.y }; }
+		Vector2Int operator-(const Vector2Int& other) const { return { x - other.x, y - other.y }; }
+
+		template<typename T>
+		Vector2Int operator*(const T pMult) const { return { x * pMult, y * pMult }; }
 	};
 
 	struct GameTime
