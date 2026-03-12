@@ -32,18 +32,31 @@ namespace Rendering
 		pHeight = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
 	}
 
+	//void SetWindowSize(int width, int height)
+	//{
+	//	HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+
+	//	// Set the buffer size first
+	//	COORD bufferSize = { (SHORT)width, (SHORT)height };
+	//	SetConsoleScreenBufferSize(hConsole, bufferSize);
+
+	//	// Then set the window size
+	//	SMALL_RECT windowSize = { 0, 0, (SHORT)(width - 1), (SHORT)(height - 1) };
+	//	SetConsoleWindowInfo(hConsole, TRUE, &windowSize);
+	//}
+
 	class RendBuffer // Doesn't handle memcopies... Im lazy...
 	{
 	public:
 		const UINT32 mMaxSize;
-	private:
 		int mWidth = 0, mHeight = 0;
+	private:
 		char* mCharBuffer = nullptr;
 		Color* mColorBuffer = nullptr;
 
 	public:
-		inline int GetWidth() const { return mWidth; }
-		inline int GetHeight() const { return mHeight; }
+		inline int Width() const { return mWidth; }
+		inline int Height() const { return mHeight; }
 
 		inline void FillBuffer(const char pChar, const Color pColor = white)
 		{

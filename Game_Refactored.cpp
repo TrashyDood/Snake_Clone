@@ -12,13 +12,15 @@ namespace Game_Refactored
 {
 	RunID RunGame()
 	{
-		GameInstance game(std::filesystem::current_path());
+		GameInstance game;
 		game.OnInit();
+
+		//Rendering::SetWindowSize(300, 200);
 
 		GameTime time{};
 		GameTime fixedTime{ duration<float>(1.0f / 8) };
 		GameTime drawTime{ duration<float>(1.0f / 24) };
-		Rendering::RendBuffer renderBuffer(3600);
+		Rendering::RendBuffer renderBuffer(4500);
 
 		steady_clock::time_point previousTime = steady_clock::now();
 		duration<float> fixedAccumulator(0.0f), drawAccumulator(0.0f);
@@ -59,6 +61,15 @@ namespace Game_Refactored
 		return game.OnExit();
 	}
 
+	inline const void GameInstance::KillSnake(PlayerSnake& pSnake)
+	{
+		if (!pSnake.IsAlive())
+			return;
+
+		pSnake.OnKilled();
+		mLivingSnakes--;
+	}
+
 	void GameInstance::OnInit()
 	{
 		for (size_t i = 0; i < mPlayers.size(); i++)
@@ -73,7 +84,7 @@ namespace Game_Refactored
 		if (Input::GetKey(VK_F1)) LoadLevel();
 		if (Input::GetKey('R')) mRunId = RESTART;
 
-		if (mState == GameState::STARTING)
+		if (mState == STARTING)
 		{
 			Vector2Int input = { 0,0 };
 			for (auto& player : mPlayers)
@@ -83,7 +94,7 @@ namespace Game_Refactored
 			}
 
 			if (Input::GetKey(VK_SPACE) && !mActiveSnakes.empty())
-				mState = GameState::PLAYING;
+				mState = PLAYING;
 		}
 
 		for (auto& snake : mActiveSnakes)
@@ -104,16 +115,20 @@ namespace Game_Refactored
 		pBuffer.ClearBuffers();
 
 		Vector2Int pos = { 0,0 };
+		int centerX = pBuffer.mWidth / 2 - mTileMap.mWidth / 2,
+			centerY = pBuffer.mHeight / 2 - mTileMap.mHeight / 2;
+
+
 		Tile* tile = nullptr;
-		for (size_t x = 0; x < mTileMap.GetWidth(); x++)
-			for (size_t y = 0; y < mTileMap.GetHeight(); y++)
+		for (size_t x = 0; x < mTileMap.mWidth; x++)
+			for (size_t y = 0; y < mTileMap.mHeight; y++)
 			{
 				pos.x = x;
 				pos.y = y;
 				tile = mTileMap[pos];
 
-				if (tile)
-					pBuffer.DrawCharCoords(tile->mSymbol, x, y, tile->mColor);
+				if (tile) pBuffer.DrawCharCoords(tile->mSymbol, x + centerX, y + centerY, tile->mColor);
+				else pBuffer.DrawCharCoords('.', x + centerX, y + centerY, white);
 			}
 
 		pBuffer.RenderBuffers();
@@ -126,28 +141,36 @@ namespace Game_Refactored
 
 	void GameInstance::LoadLevel()
 	{
-		std::fstream file(std::filesystem::current_path().string() +
-			"\\LevelData.txt", std::ios::in | std::ios::out);
+		std::filesystem::path filePath = std::filesystem::current_path() / "LevelData.txt";
+		std::ifstream file(filePath);
+
+		if (!file.is_open())
+			throw std::runtime_error("Failed to open LevelData.txt");
 
 		std::string line;
-		std::string content;
+		uint32_t width = 0, height = 0;
 
-		UINT32 height = 0, width = 0;
+		// First pass: find width and height
 		while (std::getline(file, line))
 		{
-			if (line.empty()) break;
-
-			if (height == 0) width = line.size();
-
+			if (line.size() > width) width = line.size();
 			height++;
-			content.append(line);
 		}
+
+		file.clear();
+		file.seekg(0);
 
 		mTileMap = TileMap(width, height);
 
-		for (size_t i = 0; i < content.size(); i++)
-			if (content[i] != ' ')
-				mTileMap[i] = &mWallTile;
+		// Second pass: set tiles
+		int y = 0;
+		while (std::getline(file, line))
+		{
+			for (int x = 0; x < line.size(); x++)
+				if (line[x] != ' ')
+					mTileMap.SetTile(&mWallTile, {x, y});
+			y++;
+		}
 	}
 
 	void GameInstance::InitNewSnake(Player& pPlayer)
@@ -186,11 +209,10 @@ namespace Game_Refactored
 
 		if (mGame.mState != PLAYING) return;
 
-		Vector2Int oldTail = Tail();
-		mGame.GetTileMap().SetTile(nullptr, oldTail);
+		mGame.GetTileMap().SetTile(nullptr, Tail());
 		mPositions.pop_back();
 
-		Vector2Int newHead = mGame.GetTileMap()(mPositions.front() + mDirection);
+		Vector2Int newHead = mGame.GetTileMap()(Head() + mDirection);
 		mGame.GetTileMap().SetTile(&mPlayer.mTile, newHead);
 		mPositions.push_front(newHead);
 	}
@@ -205,6 +227,11 @@ namespace Game_Refactored
 
 		if (collidedTile)
 			collidedTile->mColEvent(mGame, *this, collidedTile);
+	}
+
+	void PlayerSnake::OnKilled()
+	{
+		mIsAlive = false;
 	}
 
 	namespace CollisionEvents
@@ -226,6 +253,7 @@ namespace Game_Refactored
 
 		bool DeathCol(GameInstance& pGame, PlayerSnake& pSnake, Tile* pTile)
 		{
+			pGame.KillSnake(pSnake);
 			return true;
 		}
 	}
