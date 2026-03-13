@@ -2,6 +2,7 @@
 
 #include "Utils.h"
 #include "Tile.h"
+
 #include <chrono>
 #include <array>
 #include <vector>
@@ -10,6 +11,7 @@
 #include <fstream>
 #include <filesystem>
 #include <random>
+#include <unordered_map>
 
 using namespace std::chrono;
 
@@ -21,17 +23,18 @@ namespace Game_Refactored
 	// Too lazy to make new files...
 #pragma region Forward Declarations
 	struct GameInstance;
+	struct LevelInstance;
 	struct Player;
 	struct PlayerSnake;
 	struct Tile;
-	typedef bool (*CollisionEvent)(GameInstance&, PlayerSnake&, Tile*);
+	typedef bool (*CollisionEvent)(LevelInstance& pLevel, PlayerSnake&, Tile*);
 
 	namespace CollisionEvents
 	{
-		bool FruitCol(GameInstance& pGame, PlayerSnake& pSnake, Tile* pTile);
-		bool SuperFruitCol(GameInstance& pGame, PlayerSnake& pSnake, Tile* pTile);
-		bool MegaFruitCol(GameInstance& pGame, PlayerSnake& pSnake, Tile* pTile);
-		bool DeathCol(GameInstance& pGame, PlayerSnake& pSnake, Tile* pTile);
+		bool FruitCol(LevelInstance& pLevel, PlayerSnake& pSnake, Tile* pTile);
+		bool SuperFruitCol(LevelInstance& pLevel, PlayerSnake& pSnake, Tile* pTile);
+		bool MegaFruitCol(LevelInstance& pLevel, PlayerSnake& pSnake, Tile* pTile);
+		bool DeathCol(LevelInstance& pLevel, PlayerSnake& pSnake, Tile* pTile);
 	}
 #pragma endregion
 
@@ -45,7 +48,7 @@ namespace Game_Refactored
 	enum GameState : ID
 	{
 		PLAYING = 0,
-		STARTING = 1,
+		LEVELSTART = 1,
 		PAUSED = 2,
 		GAMEOVER = 3
 	};
@@ -176,76 +179,27 @@ namespace Game_Refactored
 		PlayerSnake& operator=(const PlayerSnake&) = delete;
 		PlayerSnake& operator=(PlayerSnake&&) = default;
 
-		const inline Vector2Int Head() const { return mPositions.front(); }
-		const inline Vector2Int Tail() const { return mPositions.back(); }
+		const inline Vector2Int& Head() const { return mPositions.front(); }
+		const inline Vector2Int& Tail() const { return mPositions.back(); }
 		const inline bool IsAlive() const { return mIsAlive; }
 
-		void OnTick(const GameTime& pTime, LevelInstance* pLevel);
-		void OnFixedTick(const GameTime& pTime, LevelInstance* pLevel);
-		void OnTickCollisions(const GameTime& pTime, LevelInstance* pLevel);
+		void OnTick(const GameTime& pTime, LevelInstance& pLevel);
+		void OnFixedTick(const GameTime& pTime, LevelInstance& pLevel);
+		void OnTickCollisions(const GameTime& pTime, LevelInstance& pLevel);
 
 		void OnKilled();
-		void Add(LevelInstance* pLevel, int32_t pAmount = 1);
+		void Add(LevelInstance& pLevel, int32_t pAmount = 1);
 	};
 
-	struct LevelInstance
-	{
-		GameInstance& mGame;
-		TileMap mTileMap;
-		uint32_t mLivingSnakes = 0;
-		std::vector<PlayerSnake> mActiveSnakes{};
-		std::mt19937 mRand;
-
-		inline void KillSnake(PlayerSnake& pSnake);
-		inline void RemoveSnake(PlayerSnake& pSnake);
-		inline void InitNewSnake(Player& pPlayer);
-
-		const inline TileIndex RandomTileIndex();
-		const inline TileIndex RandomEmptyTileIndex();
-
-		inline void SpawnRandomFruit(GameInstance& pGame);
-
-		LevelInstance(GameInstance& pGame, std::filesystem::path pFilePath) : mGame(pGame)
-		{
-			//std::filesystem::path filePath = std::filesystem::current_path() / "GameData\\Levels\\Level1.txt";
-			std::ifstream file(pFilePath);
-
-			if (!file.is_open())
-				throw std::runtime_error("Failed to open LevelData.txt");
-
-			std::string line;
-			uint32_t width = 0, height = 0;
-
-			// First pass: find width and height
-			while (std::getline(file, line))
-			{
-				if (line.size() > width) width = line.size();
-				height++;
-			}
-
-			file.clear();
-			file.seekg(0);
-
-			mTileMap = TileMap(width, height);
-
-			// Second pass: set tiles
-			int y = 0;
-			while (std::getline(file, line))
-			{
-				for (int x = 0; x < line.size(); x++)
-					if (line[x] != ' ')
-						mTileMap.SetTile(&pGame.mWallTile, { x, y });
-				y++;
-			}
-		}
-	};
-
+	// Represents the entire game.
 	class GameInstance
 	{
 	public:
 		RunID mRunId = RUNNING;
-		GameState mState = STARTING;
+		GameState mState = LEVELSTART;
 		LevelInstance* mLevel = nullptr;
+		const std::filesystem::path mWorkingDir,
+			mLevelsPath = mWorkingDir / "Levels";
 
 		Tile mWallTile = { '#', BACKGROUND_GREEN | BACKGROUND_BLUE },
 			mFruitTile = { '+', FOREGROUND_GREEN, CollisionEvents::FruitCol },
@@ -261,13 +215,40 @@ namespace Game_Refactored
 		};
 
 	public:
+		GameInstance(std::filesystem::path pWorkingDir) :
+			mWorkingDir(pWorkingDir) {}
+
 		void OnInit();
 		void OnTick(const GameTime& pTime);
 		void OnFixedTick(const GameTime& pTime);
 		void OnDraw(const GameTime& pTime, Rendering::RendBuffer& pBuffer);
 		RunID OnExit();
-	private:
-		bool IsPlayerActive(Player& pPlayer);
+
+		void LoadLevel(std::filesystem::path pPath);
+		Tile* PickFruit(std::mt19937& pRand);
+	};
+
+	// Represents a loaded level.
+	struct LevelInstance
+	{
+		GameInstance& mGame;
+		TileMap mTileMap;
+		uint32_t mLivingSnakes = 0;
+		std::vector<PlayerSnake> mActiveSnakes{};
+		std::mt19937 mRand;
+		const std::filesystem::path mPath;
+
+		inline void KillSnake(PlayerSnake& pSnake);
+		inline void RemoveSnake(PlayerSnake& pSnake);
+		inline void InitNewSnake(Player& pPlayer);
+		inline bool IsPlayerActive(Player& pPlayer);
+
+		const inline TileIndex RandomTileIndex();
+		const inline TileIndex RandomEmptyTileIndex();
+
+		inline void SpawnRandomFruit();
+
+		LevelInstance(GameInstance& pGame, std::filesystem::path pFilePath);
 	};
 
 	RunID RunGame();
