@@ -9,6 +9,7 @@
 #include <cmath>
 #include <fstream>
 #include <filesystem>
+#include <random>
 
 using namespace std::chrono;
 
@@ -162,28 +163,81 @@ namespace Game_Refactored
 	private:
 		std::deque<Vector2Int> mPositions;
 		bool mIsAlive = true;
-		int mPoints = -1,
-			mSpeed = 2;
+		int mPoints = 0;
+		int32_t mId;
 
 	public:
 		PlayerSnake(const PlayerSnake&) = delete;
-		PlayerSnake& operator=(const PlayerSnake&) = delete;
-
 		PlayerSnake(PlayerSnake&&) = default;
-		PlayerSnake& operator=(PlayerSnake&&) = default;
 
-		PlayerSnake(Player& pPlayer, Vector2Int pStartPos = {0, 0}, Vector2Int pStartDir = {1, 0}) :
-			mPlayer(&pPlayer), mPositions(2, pStartPos), mDirection(pStartDir) { }
+		PlayerSnake(Player& pPlayer, uint32_t pId, Vector2Int pStartPos = { 0, 0 }, Vector2Int pStartDir = { 1, 0 }) :
+			mPlayer(&pPlayer), mId(pId), mPositions(2, pStartPos), mDirection(pStartDir) { }
+
+		PlayerSnake& operator=(const PlayerSnake&) = delete;
+		PlayerSnake& operator=(PlayerSnake&&) = default;
 
 		const inline Vector2Int Head() const { return mPositions.front(); }
 		const inline Vector2Int Tail() const { return mPositions.back(); }
 		const inline bool IsAlive() const { return mIsAlive; }
 
-		void OnTick(const GameTime& pTime, GameInstance& pGame);
-		void OnFixedTick(const GameTime& pTime, GameInstance& pGame);
-		void OnTickCollisions(const GameTime& pTime, GameInstance& pGame);
+		void OnTick(const GameTime& pTime, LevelInstance* pLevel);
+		void OnFixedTick(const GameTime& pTime, LevelInstance* pLevel);
+		void OnTickCollisions(const GameTime& pTime, LevelInstance* pLevel);
 
 		void OnKilled();
+		void Add(LevelInstance* pLevel, int32_t pAmount = 1);
+	};
+
+	struct LevelInstance
+	{
+		GameInstance& mGame;
+		TileMap mTileMap;
+		uint32_t mLivingSnakes = 0;
+		std::vector<PlayerSnake> mActiveSnakes{};
+		std::mt19937 mRand;
+
+		inline void KillSnake(PlayerSnake& pSnake);
+		inline void RemoveSnake(PlayerSnake& pSnake);
+		inline void InitNewSnake(Player& pPlayer);
+
+		const inline TileIndex RandomTileIndex();
+		const inline TileIndex RandomEmptyTileIndex();
+
+		inline void SpawnRandomFruit(GameInstance& pGame);
+
+		LevelInstance(GameInstance& pGame, std::filesystem::path pFilePath) : mGame(pGame)
+		{
+			//std::filesystem::path filePath = std::filesystem::current_path() / "GameData\\Levels\\Level1.txt";
+			std::ifstream file(pFilePath);
+
+			if (!file.is_open())
+				throw std::runtime_error("Failed to open LevelData.txt");
+
+			std::string line;
+			uint32_t width = 0, height = 0;
+
+			// First pass: find width and height
+			while (std::getline(file, line))
+			{
+				if (line.size() > width) width = line.size();
+				height++;
+			}
+
+			file.clear();
+			file.seekg(0);
+
+			mTileMap = TileMap(width, height);
+
+			// Second pass: set tiles
+			int y = 0;
+			while (std::getline(file, line))
+			{
+				for (int x = 0; x < line.size(); x++)
+					if (line[x] != ' ')
+						mTileMap.SetTile(&pGame.mWallTile, { x, y });
+				y++;
+			}
+		}
 	};
 
 	class GameInstance
@@ -191,16 +245,12 @@ namespace Game_Refactored
 	public:
 		RunID mRunId = RUNNING;
 		GameState mState = STARTING;
-		TileMap mTileMap;
-
-	private:
-		uint32_t mLivingSnakes = 0;
-		std::vector<PlayerSnake> mActiveSnakes{};
+		LevelInstance* mLevel = nullptr;
 
 		Tile mWallTile = { '#', BACKGROUND_GREEN | BACKGROUND_BLUE },
-			mFruitTile = { '*', FOREGROUND_GREEN, CollisionEvents::FruitCol },
-			mSuperFruitTile = { '*', FOREGROUND_RED | FOREGROUND_GREEN, CollisionEvents::SuperFruitCol },
-			mMegaFruitTile = { '*', FOREGROUND_RED | FOREGROUND_BLUE, CollisionEvents::MegaFruitCol };
+			mFruitTile = { '+', FOREGROUND_GREEN, CollisionEvents::FruitCol },
+			mSuperFruitTile = { '+', FOREGROUND_RED | FOREGROUND_GREEN, CollisionEvents::SuperFruitCol },
+			mMegaFruitTile = { '+', FOREGROUND_RED | FOREGROUND_BLUE, CollisionEvents::MegaFruitCol };
 
 		std::array<Player, 4> mPlayers
 		{
@@ -211,20 +261,12 @@ namespace Game_Refactored
 		};
 
 	public:
-		const inline bool PVPEnabled() const { return mActiveSnakes.size() > 1; }
-		inline TileMap& GetTileMap() { return mTileMap; }
-
-		inline void KillSnake(PlayerSnake& pSnake);
-		inline void RemoveSnake(PlayerSnake& pSnake);
-
 		void OnInit();
 		void OnTick(const GameTime& pTime);
 		void OnFixedTick(const GameTime& pTime);
 		void OnDraw(const GameTime& pTime, Rendering::RendBuffer& pBuffer);
 		RunID OnExit();
 	private:
-		void LoadLevel();
-		void InitNewSnake(Player& pPlayer);
 		bool IsPlayerActive(Player& pPlayer);
 	};
 
