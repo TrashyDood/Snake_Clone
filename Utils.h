@@ -3,6 +3,7 @@
 #include <iostream>
 #include <windows.h>
 #include <string>
+#include <unordered_map>
 
 typedef unsigned short Color;
 typedef int KeyID;
@@ -196,4 +197,15 @@ namespace Collections
 namespace Input
 {
 	inline int GetKey(KeyID pKey) { return GetAsyncKeyState(pKey) & 0x8000; }
+
+	inline bool GetKeyDown(KeyID pKey)
+	{
+		static std::unordered_map<KeyID, bool> sPreviousKeys;
+
+		bool current = GetKey(pKey);
+		bool previous = sPreviousKeys[pKey];
+		sPreviousKeys[pKey] = current;
+
+		return current && !previous;
+	}
 }

@@ -3,6 +3,7 @@
 #include <stdexcept>
 #include <cmath>
 #include <random>
+#include "Game_Refactored.h"
 
 #define WRITELINE(x) std::cout << x << "\n" 
 #define WRITE(x) std::cout << x;

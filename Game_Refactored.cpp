@@ -64,69 +64,82 @@ namespace Game_Refactored
 		for (size_t i = 0; i < mPlayers.size(); i++)
 			mPlayers[i].mId = i;
 
-		LoadLevel("Level1.txt");
+		RegisterLevels();
+		//LoadLevel(GetLevelFromIndex(0));
 	}
 
 	void GameInstance::OnTick(const GameTime& pTime)
 	{
-		if (Input::GetKey(VK_ESCAPE)) mRunId = EXIT;
-		if (Input::GetKey('R')) mRunId = RESTART;
-		if (Input::GetKey(VK_F1)) LoadLevel("Level1.txt");
-		if (Input::GetKey(VK_F2)) LoadLevel("Level2.txt");
-		if (Input::GetKey(VK_F3)) LoadLevel("Level3.txt");
-		if (Input::GetKey(VK_F4)) LoadLevel("Level4.txt");
-		if (Input::GetKey(VK_F5)) LoadLevel("Level5.txt");
-		if (Input::GetKey(VK_F6)) LoadLevel("Level6.txt");
-		if (Input::GetKey(VK_F7)) LoadLevel("Level7.txt");
-
-		if (mState == LEVELSTART)
+		switch (mState)
 		{
-			Vector2Int input = { 0,0 };
-			for (auto& player : mPlayers)
-			{
-				if (!mLevel->IsPlayerActive(player) && player.mInput.IsInputting())
-					mLevel->InitNewSnake(player);
-			}
+		case MAINMENU:
+			mLevelSelectMenu.OnTick();
+			if (mLevelSelectMenu.Confirmed())
+				mPendingLevel = new LevelInstance(*this, mLevels[mLevelSelectMenu.mSelected]);
+			break;
 
-			if (Input::GetKey(VK_SPACE) && !mLevel->mActiveSnakes.empty())
-				mState = PLAYING;
+		case PAUSED:
+			mPauseMenu.OnTick();
+			if (mPauseMenu.Confirmed())
+			{
+				if (mPauseMenu.mSelected == 0) mState = PLAYING;
+				else if (mPauseMenu.mSelected == 1) LoadLevel(mLevel->mPath);
+				else if (mPauseMenu.mSelected == 2)
+				{
+					mState = MAINMENU;
+					mLevel = nullptr;
+				}
+			}
+			break;
+
+		case GAMEOVER:
+			mGameOverMenu.OnTick();
+			if (mGameOverMenu.Confirmed())
+			{
+				if (mGameOverMenu.mSelected == 0) LoadLevel(mLevel->mPath);
+				else if (mGameOverMenu.mSelected == 1)
+				{
+					mState = MAINMENU;
+					mLevel = nullptr;
+				}
+			}
+			break;
+
+		default:
+			if (mLevel) mLevel->OnTick(pTime);
+			break;
 		}
 
-		for (auto& snake : mLevel->mActiveSnakes)
-			snake.OnTick(pTime, *mLevel);
+		if (mPendingLevel) // Deferred level loading to avoid read violations.
+		{
+			if (mLevel) delete(mLevel);
+			mLevel = mPendingLevel;
+			mPendingLevel = nullptr;
+			mState = LEVELSTART;
+		}
 	}
 
 	void GameInstance::OnFixedTick(const GameTime& pTime)
 	{
-		for (auto& snake : mLevel->mActiveSnakes)
-			snake.OnTickCollisions(pTime, *mLevel);
-
-		for (auto& snake : mLevel->mActiveSnakes)
-			snake.OnFixedTick(pTime, *mLevel);
+		if (mLevel)
+			mLevel->OnFixedTick(pTime);
 	}
 
 	void GameInstance::OnDraw(const GameTime& pTime, Rendering::RendBuffer& pBuffer)
 	{
-		pBuffer.ClearBuffers();
+		pBuffer.ClearBuffers();  // moved here
 
-		int mapCenterX = pBuffer.mWidth / 2 - mLevel->mTileMap.mWidth / 2,
-			mapCenterY = pBuffer.mHeight / 2 - mLevel->mTileMap.mHeight / 2;
+		if (mLevel)
+			mLevel->OnDraw(pTime, pBuffer);
 
-		Tile* tile = nullptr;
-		for (int x = 0; x < mLevel->mTileMap.mWidth; x++)
-			for (int y = 0; y < mLevel->mTileMap.mHeight; y++)
-			{
-				tile = mLevel->mTileMap[{ x, y }];
+		int cx = pBuffer.mWidth / 2 - 10;
+		int cy = pBuffer.mHeight / 2 - 4;
 
-				if (tile) // Draw tile map.
-					pBuffer.DrawCharCoords(tile->mSymbol, x + mapCenterX, y + mapCenterY, tile->mColor);
-				else if (x > 0 && x < mLevel->mTileMap.mWidth - 1 && y > 0 && y < mLevel->mTileMap.mHeight - 1) // Draw floor.
-					pBuffer.DrawCharCoords('.', x + mapCenterX, y + mapCenterY, white);
-				else // Draw borders.
-					pBuffer.DrawCharCoords('*', x + mapCenterX, y + mapCenterY, FOREGROUND_RED | FOREGROUND_BLUE);
-			}
+		if (mState == MAINMENU)  mLevelSelectMenu.OnDraw(pBuffer, cx, cy);
+		if (mState == PAUSED)    mPauseMenu.OnDraw(pBuffer, cx, cy);
+		if (mState == GAMEOVER)  mGameOverMenu.OnDraw(pBuffer, cx, cy);
 
-		pBuffer.RenderBuffers();
+		pBuffer.RenderBuffers();  // moved here
 	}
 
 	RunID GameInstance::OnExit()
@@ -134,13 +147,28 @@ namespace Game_Refactored
 		return mRunId;
 	}
 
+	void GameInstance::RegisterLevels()
+	{
+		mLevels.clear();
+		mLevelSelectMenu.mOptions.clear();
+
+		for (const auto& entry : std::filesystem::directory_iterator(mLevelsPath))
+			if (entry.is_regular_file())
+			{
+				mLevels.push_back(entry.path().string());
+				mLevelSelectMenu.mOptions.push_back(entry.path().stem().string());
+			}
+	}
+
+
+	std::filesystem::path GameInstance::GetLevelFromIndex(uint32_t pIndex)
+	{
+		return mLevels[pIndex % mLevels.size()];
+	}
+
 	void GameInstance::LoadLevel(std::filesystem::path pPath)
 	{
-		if (mLevel)
-			delete(mLevel);
-
-		mState = LEVELSTART;
-		mLevel = new LevelInstance(*this, pPath);
+		mPendingLevel = new LevelInstance(*this, mLevelsPath / pPath);
 	}
 
 	Tile* GameInstance::PickFruit(std::mt19937& pRand)
@@ -154,6 +182,71 @@ namespace Game_Refactored
 		return fruit;
 	}
 
+
+	void LevelInstance::OnTick(const GameTime& pTime)
+	{
+		if (mGame.mState == LEVELSTART)
+		{
+			Vector2Int input = { 0,0 };
+			for (auto& player : mGame.mPlayers)
+			{
+				if (!IsPlayerActive(player) && player.mInput.IsInputting())
+					InitNewSnake(player);
+			}
+
+			if (Input::GetKey(VK_SPACE) && !mActiveSnakes.empty())
+				mGame.mState = PLAYING;
+		}
+
+		if (Input::GetKey('R')) mGame.mRunId = RESTART;
+		if (Input::GetKey(VK_F1)) mGame.LoadLevel(mGame.GetLevelFromIndex(0));
+		if (Input::GetKey(VK_F2)) mGame.LoadLevel(mGame.GetLevelFromIndex(1));
+		if (Input::GetKey(VK_F3)) mGame.LoadLevel(mGame.GetLevelFromIndex(2));
+		if (Input::GetKey(VK_F4)) mGame.LoadLevel(mGame.GetLevelFromIndex(3));
+		if (Input::GetKey(VK_F5)) mGame.LoadLevel(mGame.GetLevelFromIndex(4));
+		if (Input::GetKey(VK_F6)) mGame.LoadLevel(mGame.GetLevelFromIndex(5));
+		if (Input::GetKey(VK_F7)) mGame.LoadLevel(mGame.GetLevelFromIndex(6));
+
+		if (Input::GetKeyDown(VK_ESCAPE))
+		{
+			if (mGame.mState == PAUSED)
+				mGame.mState = PLAYING;
+			else if (mGame.mState == PLAYING)
+				mGame.mState = PAUSED;
+		}
+
+		for (auto& snake : mActiveSnakes)
+			snake.OnTick(pTime, *this);
+	}
+
+	void LevelInstance::OnFixedTick(const GameTime& pTime)
+	{
+		for (auto& snake : mActiveSnakes)
+			snake.OnTickCollisions(pTime, *this);
+
+		for (auto& snake : mActiveSnakes)
+			snake.OnFixedTick(pTime, *this);
+	}
+
+	void LevelInstance::OnDraw(const GameTime& pTime, Rendering::RendBuffer& pBuffer)
+	{
+		int mapCenterX = pBuffer.mWidth / 2 - mTileMap.mWidth / 2,
+			mapCenterY = pBuffer.mHeight / 2 - mTileMap.mHeight / 2;
+
+		Tile* tile = nullptr;
+		for (int x = 0; x < mTileMap.mWidth; x++)
+			for (int y = 0; y < mTileMap.mHeight; y++)
+			{
+				tile = mTileMap[{ x, y }];
+
+				if (tile) // Draw tile map.
+					pBuffer.DrawCharCoords(tile->mSymbol, x + mapCenterX, y + mapCenterY, tile->mColor);
+				else if (x > 0 && x < mTileMap.mWidth - 1 && y > 0 && y < mTileMap.mHeight - 1) // Draw floor.
+					pBuffer.DrawCharCoords('.', x + mapCenterX, y + mapCenterY, white);
+				else // Draw borders.
+					pBuffer.DrawCharCoords('*', x + mapCenterX, y + mapCenterY, FOREGROUND_RED | FOREGROUND_BLUE);
+			}
+	}
 
 	inline void LevelInstance::KillSnake(PlayerSnake& pSnake)
 	{
@@ -218,10 +311,10 @@ namespace Game_Refactored
 	LevelInstance::LevelInstance(GameInstance& pGame, std::filesystem::path pPath) :
 		mGame(pGame), mPath(pPath)
 	{
-		std::ifstream file(pGame.mWorkingDir / pGame.mLevelsPath / pPath);
+		std::ifstream file(pPath);
 
 		if (!file.is_open())
-			throw std::runtime_error("Failed to open level file.");
+			throw std::runtime_error("Failed to open: " + pPath.string());
 
 		std::string line;
 		uint32_t width = 0, height = 0;

@@ -50,7 +50,8 @@ namespace Game_Refactored
 		PLAYING = 0,
 		LEVELSTART = 1,
 		PAUSED = 2,
-		GAMEOVER = 3
+		GAMEOVER = 3,
+		MAINMENU = 4,
 	};
 
 	struct Vector2Int
@@ -191,15 +192,51 @@ namespace Game_Refactored
 		void Add(LevelInstance& pLevel, int32_t pAmount = 1);
 	};
 
+	struct UIMenu
+	{
+		std::string mTitle;
+		std::vector<std::string> mOptions;
+		int mSelected = 0;
+
+		void OnTick()
+		{
+			if (Input::GetKeyDown(VK_DOWN)) mSelected = (mSelected + 1) % mOptions.size();
+			if (Input::GetKeyDown(VK_UP))   mSelected = (mSelected - 1 + mOptions.size()) % mOptions.size();
+		}
+
+		bool Confirmed() { return Input::GetKeyDown(VK_RETURN); }
+
+		void OnDraw(Rendering::RendBuffer& pBuffer, int pX, int pY) const
+		{
+			pBuffer.DrawString(mTitle, pX, pY, FOREGROUND_RED | FOREGROUND_INTENSITY);
+
+			for (int i = 0; i < mOptions.size(); i++)
+			{
+				Color col = (i == mSelected) ? FOREGROUND_GREEN | FOREGROUND_INTENSITY : white;
+				std::string line = (i == mSelected ? "> " : "  ") + mOptions[i];
+				pBuffer.DrawString(line, pX, pY + 2 + i, col);
+			}
+		}
+	};
+
 	// Represents the entire game.
 	class GameInstance
 	{
+	private:
+		std::vector<std::string> mLevels{};
+		LevelInstance* mPendingLevel = nullptr;
+
+		UIMenu mLevelSelectMenu{ "SELECT LEVEL", {} };
+		UIMenu mPauseMenu{ "PAUSED", { "Resume", "Restart", "Exit To Menu" } };
+		UIMenu mGameOverMenu{ "GAME OVER", { "Restart", "Exit To Menu" } };
+
 	public:
 		RunID mRunId = RUNNING;
-		GameState mState = LEVELSTART;
+		GameState mState = MAINMENU;
 		LevelInstance* mLevel = nullptr;
 		const std::filesystem::path mWorkingDir,
 			mLevelsPath = mWorkingDir / "Levels";
+
 
 		Tile mWallTile = { '#', BACKGROUND_GREEN | BACKGROUND_BLUE },
 			mFruitTile = { '+', FOREGROUND_GREEN, CollisionEvents::FruitCol },
@@ -224,6 +261,8 @@ namespace Game_Refactored
 		void OnDraw(const GameTime& pTime, Rendering::RendBuffer& pBuffer);
 		RunID OnExit();
 
+		void RegisterLevels();
+		std::filesystem::path GetLevelFromIndex(uint32_t pIndex);
 		void LoadLevel(std::filesystem::path pPath);
 		Tile* PickFruit(std::mt19937& pRand);
 	};
@@ -237,6 +276,10 @@ namespace Game_Refactored
 		std::vector<PlayerSnake> mActiveSnakes{};
 		std::mt19937 mRand;
 		const std::filesystem::path mPath;
+
+		void OnTick(const GameTime& pTime);
+		void OnFixedTick(const GameTime& pTime);
+		void OnDraw(const GameTime& pTime, Rendering::RendBuffer& pBuffer);
 
 		inline void KillSnake(PlayerSnake& pSnake);
 		inline void RemoveSnake(PlayerSnake& pSnake);
