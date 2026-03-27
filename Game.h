@@ -152,7 +152,7 @@ namespace Game
 		int mSeed;
 		TileMap mTileMap;
 		RunID mRunId = RunID::RUNNING;
-		GameState mState = GameState::STARTING;
+		GameState mCurrentState = GameState::STARTING;
 		UINT32 mLivingSnakes;
 		bool mPvpEnabled = false;
 

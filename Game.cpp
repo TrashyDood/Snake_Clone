@@ -80,7 +80,7 @@ namespace Game
 			if (Input::GetKey(VK_ESCAPE)) pGame.mRunId = RunID::EXIT;
 			if (Input::GetKey(VK_F1)) pGame.mRunId = RunID::RESTART;
 
-			if (pGame.mState == GameState::STARTING)
+			if (pGame.mCurrentState == GameState::STARTING)
 			{
 				for (size_t i = 0; i < pGame.mPlayers.size(); i++)
 				{
@@ -93,7 +93,7 @@ namespace Game
 				}
 
 				if (Input::GetKey(VK_SPACE) && !pGame.mActiveSnakes.empty())
-					pGame.mState = GameState::PLAYING;
+					pGame.mCurrentState = GameState::PLAYING;
 			}
 
 			for (auto& snake : pGame.mActiveSnakes)
@@ -108,8 +108,8 @@ namespace Game
 			for (auto& snake : pGame.mActiveSnakes)
 				TickPlayer(pGame, pTime, snake);
 
-			if (pGame.mState == PLAYING && pGame.mLivingSnakes < ((pGame.mPvpEnabled) ? 2 : 1))
-				pGame.mState = GAMEOVER;
+			if (pGame.mCurrentState == PLAYING && pGame.mLivingSnakes < ((pGame.mPvpEnabled) ? 2 : 1))
+				pGame.mCurrentState = GAMEOVER;
 		}
 
 		void OnDraw(GameInstance& pGame, const GameTime& pTime)
@@ -120,13 +120,13 @@ namespace Game
 			DrawTileMap(pGame.mTileMap, 1, 1);
 			DrawSideInfo(pGame, pTime);
 
-			if (pGame.mState == GameState::STARTING)
+			if (pGame.mCurrentState == GameState::STARTING)
 			{
 				DrawCenteredString(pGame.mTileMap, "Waiting for players...", 2);
 				DrawCenteredString(pGame.mTileMap, "- Press 'Space' to start -", 1, 1);
 			}
 
-			if (pGame.mState == GameState::GAMEOVER)
+			if (pGame.mCurrentState == GameState::GAMEOVER)
 			{
 				DrawCenteredString(pGame.mTileMap, "Game Over", 2);
 				DrawCenteredString(pGame.mTileMap, "- Press 'F1' to restart -", 1, 1);
@@ -350,7 +350,7 @@ namespace Game
 
 		void TickCollision(GameInstance& pGame, const GameTime pTime, PlayerSnake& pSnake)
 		{
-			if (pGame.mState != PLAYING)
+			if (pGame.mCurrentState != PLAYING)
 				return;
 
 			Tile* collidedTile = pGame.mTileMap[pGame.mTileMap(
@@ -372,7 +372,7 @@ namespace Game
 				return;
 			}
 
-			if (pGame.mState != PLAYING) return;
+			if (pGame.mCurrentState != PLAYING) return;
 
 			Vector2Int oldTail = pSnake.mPositions.back();
 			PlaceTile(pGame.mTileMap, nullptr, oldTail);
@@ -385,7 +385,7 @@ namespace Game
 
 		void TickInput(GameInstance& pGame, const GameTime& pTime, PlayerSnake& pSnake)
 		{
-			if (pGame.mState != PLAYING)
+			if (pGame.mCurrentState != PLAYING)
 				return;
 
 			int inputX =

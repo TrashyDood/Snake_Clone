@@ -109,7 +109,7 @@ namespace Rendering
 			DrawChar(pChar, pX + pY * mWidth, pColor);
 		}
 
-		inline void DrawString(const std::string pString, uint32_t pX, uint32_t pY, Color pColor = white)
+		inline void DrawString(const std::string pString, uint32_t pX = 0, uint32_t pY = 0, Color pColor = white)
 		{
 			for (size_t i = 0; i < pString.size(); i++)
 				DrawCharCoords(pString[i], pX + i, pY, pColor);

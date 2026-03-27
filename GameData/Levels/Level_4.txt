@@ -1,18 +1,19 @@
+0
 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 X                                       X
 X                   X                   X
 X                   X                   X
 X                                       X
 XXXXXXX   XXXXXXXXX   XXXXXXXXX   XXXXXXX
-X                                       X
-X                                       X
+
+
 X       XXXXXXXXXXXXXXXXXXXXXXXXX       X
 X                                       X
 X                                       X
 X                                       X
 X       XXXXXXXXXXXXXXXXXXXXXXXXX       X
-X                                       X
-X                                       X
+
+
 XXXXXXX   XXXXXXXXX   XXXXXXXXX   XXXXXXX
 X                                       X
 X                   X                   X

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Utils.h"
-#include "Tile.h"
 
 #include <chrono>
 #include <array>
@@ -12,6 +11,7 @@
 #include <filesystem>
 #include <random>
 #include <unordered_map>
+#include <functional>
 
 using namespace std::chrono;
 
@@ -27,7 +27,11 @@ namespace Game_Refactored
 	struct Player;
 	struct PlayerSnake;
 	struct Tile;
-	typedef bool (*CollisionEvent)(LevelInstance& pLevel, PlayerSnake&, Tile*);
+	struct UIMenu;
+	struct UIButton;
+
+	using CollisionEvent = bool(*)(LevelInstance& pLevel, PlayerSnake&, Tile*);
+	using UIButtonCallback = std::function<void(GameInstance&, UIMenu&, UIButton&)>;
 
 	namespace CollisionEvents
 	{
@@ -52,6 +56,7 @@ namespace Game_Refactored
 		PAUSED = 2,
 		GAMEOVER = 3,
 		MAINMENU = 4,
+		SETTINGS = 5
 	};
 
 	struct Vector2Int
@@ -70,6 +75,8 @@ namespace Game_Refactored
 		duration<float> mTimeStep;
 		steady_clock::time_point mTime{};
 		float mDeltaTime = 0;
+
+		GameTime(duration<float> pTimeStep) : mTimeStep(pTimeStep) { mDeltaTime = pTimeStep.count(); }
 	};
 	
 	struct Tile
@@ -161,16 +168,21 @@ namespace Game_Refactored
 	class PlayerSnake
 	{
 	public:
-		Player* mPlayer;
-		Vector2Int mDirection;
+		Player* mPlayer = nullptr;
+		Vector2Int mDirection{};
 
 	private:
 		std::deque<Vector2Int> mPositions;
 		bool mIsAlive = true;
 		int mPoints = 0;
-		int32_t mId;
+		int32_t mId = 0;
 
 	public:
+		const inline uint32_t Score() const { return mPoints; }
+		const inline bool IsAlive() const { return mIsAlive; }
+		const inline Vector2Int& Head() const { return mPositions.front(); }
+		const inline Vector2Int& Tail() const { return mPositions.back(); }
+
 		PlayerSnake(const PlayerSnake&) = delete;
 		PlayerSnake(PlayerSnake&&) = default;
 
@@ -180,40 +192,45 @@ namespace Game_Refactored
 		PlayerSnake& operator=(const PlayerSnake&) = delete;
 		PlayerSnake& operator=(PlayerSnake&&) = default;
 
-		const inline Vector2Int& Head() const { return mPositions.front(); }
-		const inline Vector2Int& Tail() const { return mPositions.back(); }
-		const inline bool IsAlive() const { return mIsAlive; }
+		void OnTick(GameTime& pTime, LevelInstance& pLevel);
+		void OnFixedTick(GameTime& pTime, LevelInstance& pLevel);
+		bool OnTickCollisions(GameTime& pTime, LevelInstance& pLevel);
 
-		void OnTick(const GameTime& pTime, LevelInstance& pLevel);
-		void OnFixedTick(const GameTime& pTime, LevelInstance& pLevel);
-		void OnTickCollisions(const GameTime& pTime, LevelInstance& pLevel);
-
-		void OnKilled();
+		void OnKilled(LevelInstance& pLevel);
 		void Add(LevelInstance& pLevel, int32_t pAmount = 1);
+	};
+
+	struct UIButton
+	{
+		std::string mText;
+		UIButtonCallback mCallback;
 	};
 
 	struct UIMenu
 	{
 		std::string mTitle;
-		std::vector<std::string> mOptions;
+		std::vector<UIButton> mButtons;
 		int mSelected = 0;
 
-		void OnTick()
-		{
-			if (Input::GetKeyDown(VK_DOWN)) mSelected = (mSelected + 1) % mOptions.size();
-			if (Input::GetKeyDown(VK_UP))   mSelected = (mSelected - 1 + mOptions.size()) % mOptions.size();
-		}
+		bool Confirmed() { return Input::GetKeyDown(VK_SPACE); }
 
-		bool Confirmed() { return Input::GetKeyDown(VK_RETURN); }
+		void OnTick(GameInstance& pGame)
+		{
+			if (Input::GetKeyDown(VK_DOWN)) mSelected = (mSelected + 1) % mButtons.size();
+			if (Input::GetKeyDown(VK_UP)) mSelected = (mSelected - 1 + mButtons.size()) % mButtons.size();
+
+			if (Confirmed())
+				mButtons[mSelected].mCallback(pGame, *this, mButtons[mSelected]);
+		}
 
 		void OnDraw(Rendering::RendBuffer& pBuffer, int pX, int pY) const
 		{
 			pBuffer.DrawString(mTitle, pX, pY, FOREGROUND_RED | FOREGROUND_INTENSITY);
 
-			for (int i = 0; i < mOptions.size(); i++)
+			for (int i = 0; i < mButtons.size(); i++)
 			{
 				Color col = (i == mSelected) ? FOREGROUND_GREEN | FOREGROUND_INTENSITY : white;
-				std::string line = (i == mSelected ? "> " : "  ") + mOptions[i];
+				std::string line = (i == mSelected ? "> " : "  ") + mButtons[i].mText;
 				pBuffer.DrawString(line, pX, pY + 2 + i, col);
 			}
 		}
@@ -223,20 +240,18 @@ namespace Game_Refactored
 	class GameInstance
 	{
 	private:
+		LevelInstance* mCurrentLevel = nullptr;
+		LevelInstance* mPrevLevel = nullptr;
 		std::vector<std::string> mLevels{};
-		LevelInstance* mPendingLevel = nullptr;
+		GameState mCurrentState = MAINMENU,
+			mPrevState = MAINMENU;
 
-		UIMenu mLevelSelectMenu{ "SELECT LEVEL", {} };
-		UIMenu mPauseMenu{ "PAUSED", { "Resume", "Restart", "Exit To Menu" } };
-		UIMenu mGameOverMenu{ "GAME OVER", { "Restart", "Exit To Menu" } };
+		UIMenu mLevelSelectMenu, mPauseMenu, mGameOverMenu;
 
 	public:
 		RunID mRunId = RUNNING;
-		GameState mState = MAINMENU;
-		LevelInstance* mLevel = nullptr;
 		const std::filesystem::path mWorkingDir,
 			mLevelsPath = mWorkingDir / "Levels";
-
 
 		Tile mWallTile = { '#', BACKGROUND_GREEN | BACKGROUND_BLUE },
 			mFruitTile = { '+', FOREGROUND_GREEN, CollisionEvents::FruitCol },
@@ -255,16 +270,24 @@ namespace Game_Refactored
 		GameInstance(std::filesystem::path pWorkingDir) :
 			mWorkingDir(pWorkingDir) {}
 
-		void OnInit();
-		void OnTick(const GameTime& pTime);
-		void OnFixedTick(const GameTime& pTime);
-		void OnDraw(const GameTime& pTime, Rendering::RendBuffer& pBuffer);
+		void OnInit(GameTime& pTime, GameTime& pFixedTime, GameTime& pDrawTime);
+		void OnTick(GameTime& pTime);
+		void OnFixedTick(GameTime& pTime);
+		void OnDraw(GameTime& pTime, Rendering::RendBuffer& pBuffer);
 		RunID OnExit();
 
 		void RegisterLevels();
 		std::filesystem::path GetLevelFromIndex(uint32_t pIndex);
-		void LoadLevel(std::filesystem::path pPath);
+		void LoadLevel(std::filesystem::path pPath = "");
 		Tile* PickFruit(std::mt19937& pRand);
+
+		inline const GameState GetState() const { return mCurrentState; }
+		inline const GameState GetPrevState() const { return mPrevState; }
+		inline const GameState SetState(GameState pNewState)
+		{
+			mPrevState = mCurrentState;
+			return (mCurrentState = pNewState);
+		}
 	};
 
 	// Represents a loaded level.
@@ -272,27 +295,33 @@ namespace Game_Refactored
 	{
 		GameInstance& mGame;
 		TileMap mTileMap;
-		uint32_t mLivingSnakes = 0;
+		uint32_t mLivingSnakes = 0,
+			mHighScore = 0;
 		std::vector<PlayerSnake> mActiveSnakes{};
 		std::mt19937 mRand;
 		const std::filesystem::path mPath;
 
-		void OnTick(const GameTime& pTime);
-		void OnFixedTick(const GameTime& pTime);
-		void OnDraw(const GameTime& pTime, Rendering::RendBuffer& pBuffer);
+		void OnTick(GameTime& pTime);
+		void OnFixedTick(GameTime& pTime);
+		void OnDraw(GameTime& pTime, Rendering::RendBuffer& pBuffer);
+
+		const inline bool PVPEnabled() const { return mActiveSnakes.size() > 1; }
 
 		inline void KillSnake(PlayerSnake& pSnake);
 		inline void RemoveSnake(PlayerSnake& pSnake);
 		inline void InitNewSnake(Player& pPlayer);
 		inline bool IsPlayerActive(Player& pPlayer);
+		inline const PlayerSnake& GetHighestScoreSnake();
+		inline const PlayerSnake& GetLastSnake();
 
 		const inline TileIndex RandomTileIndex();
 		const inline TileIndex RandomEmptyTileIndex();
-
 		inline void SpawnRandomFruit();
+
+		void OnGameOver();
 
 		LevelInstance(GameInstance& pGame, std::filesystem::path pFilePath);
 	};
 
-	RunID RunGame();
+	RunID RunGame(std::string startLevel = "", float pTargetFixedTimestep = 8, float pTargetDrawTimeStep = 8);
 }

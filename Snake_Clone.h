@@ -10,14 +10,17 @@
 using namespace std::chrono;
 using namespace Game_Refactored;
 
-void main()
+void main(int argc, char* argv[])
 {
 	try
 	{
-		while (RunGame() == RESTART) {}
+		if (argc > 1) while (RunGame(argv[1]) == RESTART) {}
+		else while (RunGame() == RESTART) {}
 	}
 	catch (const std::exception& e)
 	{
 		WRITELINE(e.what());
 	}
+
+	WRITELINE("Game has exited.")
 }
