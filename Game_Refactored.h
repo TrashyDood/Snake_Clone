@@ -246,7 +246,9 @@ namespace Game_Refactored
 		GameState mCurrentState = MAINMENU,
 			mPrevState = MAINMENU;
 
-		UIMenu mLevelSelectMenu, mPauseMenu, mGameOverMenu;
+		UIMenu mLevelSelectMenu,
+			mPauseMenu,
+			mGameOverMenu;
 
 	public:
 		RunID mRunId = RUNNING;
@@ -277,8 +279,8 @@ namespace Game_Refactored
 		RunID OnExit();
 
 		void RegisterLevels();
-		std::filesystem::path GetLevelFromIndex(uint32_t pIndex);
-		void LoadLevel(std::filesystem::path pPath = "");
+		std::string GetLevelNameFromIndex(uint32_t pIndex);
+		void LoadLevel(std::string pName = "");
 		Tile* PickFruit(std::mt19937& pRand);
 
 		inline const GameState GetState() const { return mCurrentState; }
@@ -299,12 +301,13 @@ namespace Game_Refactored
 			mHighScore = 0;
 		std::vector<PlayerSnake> mActiveSnakes{};
 		std::mt19937 mRand;
-		const std::filesystem::path mPath;
+		const std::string mName;
 
 		void OnTick(GameTime& pTime);
 		void OnFixedTick(GameTime& pTime);
 		void OnDraw(GameTime& pTime, Rendering::RendBuffer& pBuffer);
 
+		const inline std::filesystem::path GetFilePath() const { return mGame.mLevelsPath / (mName + ".txt"); }
 		const inline bool PVPEnabled() const { return mActiveSnakes.size() > 1; }
 
 		inline void KillSnake(PlayerSnake& pSnake);
@@ -320,7 +323,7 @@ namespace Game_Refactored
 
 		void OnGameOver();
 
-		LevelInstance(GameInstance& pGame, std::filesystem::path pFilePath);
+		LevelInstance(GameInstance& pGame, std::string pName);
 	};
 
 	RunID RunGame(std::string startLevel = "", float pTargetFixedTimestep = 8, float pTargetDrawTimeStep = 8);

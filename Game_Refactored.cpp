@@ -85,13 +85,13 @@ namespace Game_Refactored
 		mPauseMenu =
 		{ "PAUSED",
 			{{ "Resume", [](GameInstance& pGame, UIMenu& pMenu, UIButton& pButton) { pGame.SetState(pGame.GetPrevState()); }},
-			{ "Restart", [](GameInstance& pGame, UIMenu& pMenu, UIButton& pButton) { pGame.LoadLevel(pGame.mCurrentLevel->mPath); }},
+			{ "Restart", [](GameInstance& pGame, UIMenu& pMenu, UIButton& pButton) { pGame.LoadLevel(pGame.mCurrentLevel->mName); }},
 			{ "Exit To Menu", [](GameInstance& pGame, UIMenu& pMenu, UIButton& pButton) { pGame.LoadLevel(); }}
 		}};
 
 		mGameOverMenu =
 		{ "GAME OVER",
-			{{ "Restart", [](GameInstance& pGame, UIMenu& pMenu, UIButton& pButton) { pGame.LoadLevel(pGame.mCurrentLevel->mPath); }},
+			{{ "Restart", [](GameInstance& pGame, UIMenu& pMenu, UIButton& pButton) { pGame.LoadLevel(pGame.mCurrentLevel->mName); }},
 			{ "Exit To Menu", [](GameInstance& pGame, UIMenu& pMenu, UIButton& pButton) { pGame.LoadLevel(); }}
 		}};
 
@@ -100,13 +100,13 @@ namespace Game_Refactored
 
 	void GameInstance::OnTick(GameTime& pTime)
 	{
-		if (Input::GetKey(VK_F1)) LoadLevel(GetLevelFromIndex(0));
-		if (Input::GetKey(VK_F2)) LoadLevel(GetLevelFromIndex(1));
-		if (Input::GetKey(VK_F3)) LoadLevel(GetLevelFromIndex(2));
-		if (Input::GetKey(VK_F4)) LoadLevel(GetLevelFromIndex(3));
-		if (Input::GetKey(VK_F5)) LoadLevel(GetLevelFromIndex(4));
-		if (Input::GetKey(VK_F6)) LoadLevel(GetLevelFromIndex(5));
-		if (Input::GetKey(VK_F7)) LoadLevel(GetLevelFromIndex(6));
+		if (Input::GetKey(VK_F1)) LoadLevel(GetLevelNameFromIndex(0));
+		if (Input::GetKey(VK_F2)) LoadLevel(GetLevelNameFromIndex(1));
+		if (Input::GetKey(VK_F3)) LoadLevel(GetLevelNameFromIndex(2));
+		if (Input::GetKey(VK_F4)) LoadLevel(GetLevelNameFromIndex(3));
+		if (Input::GetKey(VK_F5)) LoadLevel(GetLevelNameFromIndex(4));
+		if (Input::GetKey(VK_F6)) LoadLevel(GetLevelNameFromIndex(5));
+		if (Input::GetKey(VK_F7)) LoadLevel(GetLevelNameFromIndex(6));
 
 		if (mCurrentState == MAINMENU) mLevelSelectMenu.OnTick(*this);
 		else if (mCurrentState == PAUSED) mPauseMenu.OnTick(*this);
@@ -151,50 +151,48 @@ namespace Game_Refactored
 
 	void GameInstance::RegisterLevels()
 	{
-		uint32_t index;
-
 		mLevels.clear();
-		mLevelSelectMenu.mButtons.clear();
 
 		for (const auto& fileEntry : std::filesystem::directory_iterator(mLevelsPath))
 			if (fileEntry.is_regular_file())
 			{
-				std::string firstLine;
+				std::string firstLine, levelName = fileEntry.path().stem().string();
 				std::ifstream file(fileEntry.path());
 				std::getline(file, firstLine);
+				uint32_t index = mLevels.size();
 
-				index = mLevels.size();
-				UIButton button = { fileEntry.path().stem().string() + " [Highscore: " + firstLine + "]",
+				UIButton button = { levelName + " [Highscore: " + firstLine + "]",
 					[index](GameInstance& pGame, UIMenu& pMenu, UIButton& pButton)
 					{
-						pGame.LoadLevel(pGame.GetLevelFromIndex(index));
-					} };
-				mLevels.push_back(fileEntry.path().string());
+						pGame.LoadLevel(pGame.GetLevelNameFromIndex(index));
+					} 
+				};
+
+				mLevels.push_back(levelName);
 				mLevelSelectMenu.mButtons.push_back(button);
 			}
 	}
 
-	std::filesystem::path GameInstance::GetLevelFromIndex(uint32_t pIndex)
+	std::string GameInstance::GetLevelNameFromIndex(uint32_t pIndex)
 	{
 		return mLevels[pIndex % mLevels.size()];
 	}
 
-	void GameInstance::LoadLevel(std::filesystem::path pPath)
+	void GameInstance::LoadLevel(std::string pName)
 	{
 		if (mPrevLevel) return;
 
 		mPrevLevel = mCurrentLevel;
 
-		if (!pPath.empty())
+		if (!pName.empty())
 		{
-			mCurrentLevel = new LevelInstance(*this, pPath);
+			mCurrentLevel = new LevelInstance(*this, pName);
 			mCurrentState = LEVELSTART;
 			return;
 		}
 
 		mCurrentLevel = nullptr;
 		mCurrentState = MAINMENU;
-		RegisterLevels();
 	}
 
 	Tile* GameInstance::PickFruit(std::mt19937& pRand)
@@ -272,7 +270,7 @@ namespace Game_Refactored
 			pBuffer.DrawString("Score: " + std::to_string(snake.Score()), offsetX + 4, y + 1, snake.mPlayer->mTile.mColor);
 		}
 
-		pBuffer.DrawString(mPath.string());
+		pBuffer.DrawString(mName);
 	}
 
 	inline void LevelInstance::KillSnake(PlayerSnake& pSnake)
@@ -347,7 +345,7 @@ namespace Game_Refactored
 		if (highestScoreSnake.Score() > mHighScore)
 		{
 			mHighScore = highestScoreSnake.Score();
-			std::ifstream fileIn(mPath);
+			std::ifstream fileIn(mName);
 			std::string content((std::istreambuf_iterator<char>(fileIn)), std::istreambuf_iterator<char>());
 			fileIn.close();
 
@@ -355,20 +353,20 @@ namespace Game_Refactored
 			size_t newline = content.find('\n');
 			content = std::to_string(mHighScore) + (newline != std::string::npos ? content.substr(newline) : "");
 
-			std::ofstream fileOut(mPath);
+			std::ofstream fileOut(mName);
 			fileOut << content;
 		}
 
 		mGame.SetState(GAMEOVER);
 	}
 
-	LevelInstance::LevelInstance(GameInstance& pGame, std::filesystem::path pPath) :
-		mGame(pGame), mPath(pPath)
+	LevelInstance::LevelInstance(GameInstance& pGame, std::string pName) :
+		mGame(pGame), mName(pName)
 	{
-		std::ifstream file(pPath);
+		std::ifstream file(GetFilePath());
 
 		if (!file.is_open())
-			throw std::runtime_error("Failed to open: " + pPath.string());
+			throw std::runtime_error("Failed to open: " + GetFilePath().string());
 
 		std::string line;
 		uint32_t width = 0, height = 0;
