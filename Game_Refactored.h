@@ -252,8 +252,8 @@ namespace Game_Refactored
 
 	public:
 		RunID mRunId = RUNNING;
-		const std::filesystem::path mWorkingDir,
-			mLevelsPath = mWorkingDir / "Levels";
+		const std::filesystem::path mPath,
+			mLevelsPath = mPath / "Levels";
 
 		Tile mWallTile = { '#', BACKGROUND_GREEN | BACKGROUND_BLUE },
 			mFruitTile = { '+', FOREGROUND_GREEN, CollisionEvents::FruitCol },
@@ -270,7 +270,7 @@ namespace Game_Refactored
 
 	public:
 		GameInstance(std::filesystem::path pWorkingDir) :
-			mWorkingDir(pWorkingDir) {}
+			mPath(pWorkingDir) {}
 
 		void OnInit(GameTime& pTime, GameTime& pFixedTime, GameTime& pDrawTime);
 		void OnTick(GameTime& pTime);
@@ -279,8 +279,8 @@ namespace Game_Refactored
 		RunID OnExit();
 
 		void RegisterLevels();
-		std::string GetLevelNameFromIndex(uint32_t pIndex);
-		void LoadLevel(std::string pName = "");
+		std::string GetLevelNameFromIndex(int pIndex);
+		bool LoadLevel(std::string pName = "", int pSeed = 0);
 		Tile* PickFruit(std::mt19937& pRand);
 
 		inline const GameState GetState() const { return mCurrentState; }
@@ -302,12 +302,14 @@ namespace Game_Refactored
 		std::vector<PlayerSnake> mActiveSnakes{};
 		std::mt19937 mRand;
 		const std::string mName;
+		const std::filesystem::path mPath;
+
+		LevelInstance(GameInstance& pGame, std::string pName, int pSeed = 0);
 
 		void OnTick(GameTime& pTime);
 		void OnFixedTick(GameTime& pTime);
 		void OnDraw(GameTime& pTime, Rendering::RendBuffer& pBuffer);
 
-		const inline std::filesystem::path GetFilePath() const { return mGame.mLevelsPath / (mName + ".txt"); }
 		const inline bool PVPEnabled() const { return mActiveSnakes.size() > 1; }
 
 		inline void KillSnake(PlayerSnake& pSnake);
@@ -322,8 +324,7 @@ namespace Game_Refactored
 		inline void SpawnRandomFruit();
 
 		void OnGameOver();
-
-		LevelInstance(GameInstance& pGame, std::string pName);
+		void SaveHighscore();
 	};
 
 	RunID RunGame(std::string startLevel = "", float pTargetFixedTimestep = 8, float pTargetDrawTimeStep = 8);

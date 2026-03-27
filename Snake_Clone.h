@@ -12,15 +12,8 @@ using namespace Game_Refactored;
 
 void main(int argc, char* argv[])
 {
-	try
-	{
-		if (argc > 1) while (RunGame(argv[1]) == RESTART) {}
-		else while (RunGame() == RESTART) {}
-	}
-	catch (const std::exception& e)
-	{
-		WRITELINE(e.what());
-	}
+	if (argc > 1) while (RunGame(argv[1]) == RESTART) {}
+	else while (RunGame() == RESTART) {}
 
 	WRITELINE("Game has exited.")
 }

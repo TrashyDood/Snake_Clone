@@ -173,26 +173,26 @@ namespace Game_Refactored
 			}
 	}
 
-	std::string GameInstance::GetLevelNameFromIndex(uint32_t pIndex)
-	{
-		return mLevels[pIndex % mLevels.size()];
-	}
+	std::string GameInstance::GetLevelNameFromIndex(int pIndex) { return mLevels[(mLevels.size() + pIndex) % mLevels.size()]; }
 
-	void GameInstance::LoadLevel(std::string pName)
+	bool GameInstance::LoadLevel(std::string pName, int pSeed)
 	{
-		if (mPrevLevel) return;
+		if (mPrevLevel) return false;
 
 		mPrevLevel = mCurrentLevel;
 
 		if (!pName.empty())
 		{
-			mCurrentLevel = new LevelInstance(*this, pName);
+			try { mCurrentLevel = new LevelInstance(*this, pName, pSeed); }
+			catch (const std::exception&) { return false; }
+
 			mCurrentState = LEVELSTART;
-			return;
+			return true;
 		}
 
 		mCurrentLevel = nullptr;
 		mCurrentState = MAINMENU;
+		return true;
 	}
 
 	Tile* GameInstance::PickFruit(std::mt19937& pRand)
@@ -331,8 +331,7 @@ namespace Game_Refactored
 		return result;
 	}
 
-	inline void LevelInstance::SpawnRandomFruit()
-	{ mTileMap[RandomEmptyTileIndex()] = mGame.PickFruit(mRand); }
+	inline void LevelInstance::SpawnRandomFruit() { mTileMap[RandomEmptyTileIndex()] = mGame.PickFruit(mRand); }
 
 	void LevelInstance::OnGameOver()
 	{
@@ -340,41 +339,49 @@ namespace Game_Refactored
 			return;
 
 		const PlayerSnake& highestScoreSnake = GetHighestScoreSnake();
-		const PlayerSnake& lastSnake = GetLastSnake();
 
 		if (highestScoreSnake.Score() > mHighScore)
 		{
 			mHighScore = highestScoreSnake.Score();
-			std::ifstream fileIn(mName);
-			std::string content((std::istreambuf_iterator<char>(fileIn)), std::istreambuf_iterator<char>());
-			fileIn.close();
-
-			// Replace first line with new highscore
-			size_t newline = content.find('\n');
-			content = std::to_string(mHighScore) + (newline != std::string::npos ? content.substr(newline) : "");
-
-			std::ofstream fileOut(mName);
-			fileOut << content;
+			SaveHighscore();
 		}
 
 		mGame.SetState(GAMEOVER);
 	}
 
-	LevelInstance::LevelInstance(GameInstance& pGame, std::string pName) :
-		mGame(pGame), mName(pName)
+	void LevelInstance::SaveHighscore()
 	{
-		std::ifstream file(GetFilePath());
+		// Read all content
+		std::ifstream fileIn(mPath);
+		std::string firstLine, remainingContent;
+		std::getline(fileIn, firstLine); // discard old first line
+
+		std::stringstream buffer;
+		buffer << fileIn.rdbuf();
+		fileIn.close();
+
+		// Rewrite with new first line
+		std::ofstream fileOut(mPath);
+		fileOut << std::to_string(mHighScore) + "\n" << buffer.str();
+	}
+
+	LevelInstance::LevelInstance(GameInstance& pGame, std::string pName, int pSeed) :
+		mGame(pGame), mName(pName), mPath(pGame.mLevelsPath / (pName + ".txt")), mRand(std::mt19937(pSeed))
+	{
+		std::ifstream file(mPath);
 
 		if (!file.is_open())
-			throw std::runtime_error("Failed to open: " + GetFilePath().string());
+			throw std::runtime_error("Failed to open: " + mPath.string());
 
 		std::string line;
-		uint32_t width = 0, height = 0;
+		uint32_t width = 0,
+			height = 0;
 
 		// Read highscore from first line
 		std::getline(file, line);
 		mHighScore = std::stoi(line);
 
+		// Calculate dimensions of map.
 		while (std::getline(file, line))
 		{
 			if (line.size() > width) width = line.size();
@@ -385,8 +392,8 @@ namespace Game_Refactored
 		file.seekg(0);
 		std::getline(file, line); // Skip highscore line
 
-		mTileMap = TileMap(width, height);
 		int y = 0;
+		mTileMap = TileMap(width, height);
 		while (std::getline(file, line))
 		{
 			for (int x = 0; x < line.size(); x++)
